@@ -31,7 +31,7 @@ NUM       ?= 1000
 TRACE     ?= 0
 
 # ---- Verilator 编译选项 ----
-VFLAGS    := --cc --build --exe --trace --timing
+VFLAGS    := --cc --build --exe --trace
 VFLAGS    += -Wno-fatal -Wno-UNOPTFLAT -Wno-UNUSEDSIGNAL
 VFLAGS    += -I$(CVFPU_DIR)/src
 VFLAGS    += -I$(CVFPU_DIR)/src/common_cells/include

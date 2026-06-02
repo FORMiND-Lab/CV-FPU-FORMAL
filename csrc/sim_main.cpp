@@ -1,7 +1,5 @@
 //============================================================================
-// sim_main.cpp — Verilator 仿真入口
-// 时钟由 SV testbench 中的 `always #5 clk = ~clk` 驱动，
-// C++ main 只负责循环 eval + trace dump。
+// sim_main.cpp — Verilator 仿真入口 (cycle-based, C++ 驱动时钟与复位)
 //============================================================================
 
 #include <verilated.h>
@@ -19,15 +17,33 @@ int main(int argc, char** argv) {
     top->trace(tfp, 99);
     tfp->open("logs/fma_cosim.vcd");
 
-    // 主循环：Verilator --timing 模式下每次 eval() 推进一个时间步
-    while (!Verilated::gotFinish()) {
-        top->eval();
-        tfp->dump(top->contextp()->time());
+    vluint64_t sim_time = 0;
+    const vluint64_t MAX_TIME = 100000000; // 安全上限
+
+    // ---- 初始复位 ----
+    top->clk   = 0;
+    top->rst_n = 0;
+    top->eval();
+
+    // 保持复位 5 个完整周期
+    for (int i = 0; i < 5; i++) {
+        top->clk = 1; top->eval(); sim_time += 5; tfp->dump(sim_time);
+        top->clk = 0; top->eval(); sim_time += 5; tfp->dump(sim_time);
+    }
+
+    // 释放复位
+    top->rst_n = 1;
+    top->eval();
+    tfp->dump(sim_time);
+
+    // ---- 主循环 ----
+    while (!Verilated::gotFinish() && sim_time < MAX_TIME) {
+        top->clk = 1; top->eval(); sim_time += 5; tfp->dump(sim_time);
+        top->clk = 0; top->eval(); sim_time += 5; tfp->dump(sim_time);
     }
 
     top->final();
-    tfp->close();
-    delete tfp;
+    if (tfp) { tfp->close(); delete tfp; }
     delete top;
     return 0;
 }

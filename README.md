@@ -18,7 +18,32 @@ result_rtl == result_ref
 status_rtl == fflags_ref
 ```
 
-第一阶段只验证 **FP32 fused multiply-add (FMADD / FMSUB)**。
+第一阶段只验证 **FP32 fused multiply-add (FMADD)**。
+
+## 仿真架构
+
+```
+sim_main.cpp (C++)                 tb_fma_cosim.sv (SystemVerilog)
+     │                                        │
+     ├─ 驱动 clk, rst_n ──────────────────────┤
+     │                                        │
+     │                        ┌─ always @* ──────────────────────┐
+     │                        │  生成测试向量 + 调用 DPI SoftFloat │
+     │                        │  得到 golden result / fflags      │
+     │                        └──────────────────────────────────┘
+     │                                        │
+     │                        ┌─ always_ff FSM ──────────────────┐
+     │                        │  ST_SETUP → ST_CHECK → next case │
+     │                        │  驱动 DUT valid/operands         │
+     │                        │  比较 RTL output vs golden       │
+     │                        └──────────────────────────────────┘
+     │                                        │
+     └─ eval() 每半周期 ───────────────────────┘
+```
+
+- 仿真方式：Verilator cycle-based，C++ 驱动时钟，无 `--timing` 依赖
+- DPI 调用：组合逻辑 `always @*` 中调用 SoftFloat `f32_mulAdd`
+- 比较策略：逐 case 同步比较 result 和 fflags
 
 ## 项目结构
 
@@ -26,61 +51,75 @@ status_rtl == fflags_ref
 test_cv_fpv/
 ├── cvfpu/                        # cvfpu RTL 源码
 │   ├── src/                      # （fpnew_fma, fpnew_pkg, ...）
-│   ├── tb/
-│   ├── docs/
 │   └── ...
+├── berkeley-softfloat-3/         # Berkeley SoftFloat 参考模型
 ├── cosim/                        # ★ 本协同验证项目
-│   ├── Makefile
+│   ├── Makefile                  # 编译脚本 (softfloat / build / run / wave / clean)
 │   ├── README.md
+│   ├── .gitignore
 │   ├── rtl/
 │   │   └── fma_dut_wrapper.sv    # 包装 fpnew_fma，固定 FP32
 │   ├── tb/
-│   │   ├── tb_fma_cosim.sv       # SystemVerilog testbench
-│   │   └── dpi_softfloat.sv      # DPI-C 函数声明
+│   │   ├── tb_fma_cosim.sv       # Testbench (FSM + always @* 组合 DPI)
+│   │   └── dpi_softfloat.sv      # DPI-C 函数声明 (package)
 │   ├── csrc/
-│   │   ├── softfloat_dpi.cpp     # DPI-C 实现（调 SoftFloat）
+│   │   ├── sim_main.cpp          # Verilator 仿真入口 (C++ main, 驱动时钟)
+│   │   ├── softfloat_dpi.cpp     # DPI-C 实现 (调 SoftFloat f32_mulAdd)
 │   │   └── softfloat_dpi.h       # DPI-C 头文件
-│   ├── tests/
-│   │   ├── directed_cases.hex    # 定向测试用例
-│   │   └── random_seed_list.txt  # 随机测试种子列表
-│   └── logs/                     # 仿真日志和波形
+│   └── logs/                     # 构建产物 + 波形
 └── temp/                         # 临时文档
 ```
 
 ## 快速开始
 
 ```bash
-# 1. 拉取 SoftFloat 依赖（如尚未 clone）
+# 0. 进入项目目录
+cd cosim
+
+# 1. 拉取依赖
+git clone https://github.com/openhwgroup/cvfpu ../cvfpu
+git -C ../cvfpu submodule update --init --recursive
 git clone https://github.com/ucb-bar/berkeley-softfloat-3 ../berkeley-softfloat-3
 
-# 2. 编译 SoftFloat
-make softfloat
+# 2. 一键编译 + 运行
+make all NUM=100
 
-# 3. 编译 DUT + testbench
-make build
+# 3. 大规模回归
+make run NUM=10000
 
-# 4. 运行仿真
-make run
-make run SEED=1 NUM=10000
-
-# 5. 查看波形
+# 4. 查看波形
 make wave
 
-# 6. 清理
+# 5. 清理
 make clean
 ```
 
 ## 验证层次
 
-| 层级 | 内容 | 用例数 |
-|------|------|--------|
-| Sanity | 普通数值的基本运算 | ~10 |
-| Corner | ±0, ±∞, NaN, sNaN, subnormal, overflow, underflow | ~50 |
-| Random | 随机 32-bit pattern | 1000+ |
+| 层级 | 内容 | 状态 |
+|------|------|------|
+| Sanity | 4 个手工用例 (1.0×2.0+3.0 等) | ✅ 已实现 |
+| Random | 随机 32-bit pattern (约束在正常浮点范围) | ✅ 已实现 |
+| Corner | ±0, ±∞, NaN, sNaN, subnormal, overflow, underflow | ⏳ 待实现 |
+| Full Ops | FMSUB / FNMADD / FNMSUB | ⏳ 待实现 |
+
+## 验证结果
+
+```
+$ make run NUM=5000
+============================================================
+ cvfpu FMA + SoftFloat Co-Simulation Testbench
+ SEED=1, NUM=5000
+============================================================
+ PASS: 5004, FAIL: 0, TOTAL: 5004
+============================================================
+ALL TESTS PASSED
+```
 
 ## 依赖
 
-- Verilator (>= 4.0)
+- Verilator (>= 5.0)
 - GCC / Clang (C++11)
 - GNU Make
+- Berkeley SoftFloat 3e (放置于 `../berkeley-softfloat-3/`)
 - GTKWave (可选，用于波形查看)
