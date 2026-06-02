@@ -116,6 +116,16 @@ $ make run NUM=5000
 ALL TESTS PASSED
 ```
 
+## 核心模型文件
+
+| 角色 | 封装文件 (wrapper) | 被封装的核心文件 |
+|------|-------------------|------------------|
+| RTL Model (DUT) | `cosim/rtl/fma_dut_wrapper.sv` | `cvfpu/src/fpnew_fma.sv` |
+| C Model (Golden) | `cosim/csrc/softfloat_dpi.cpp` | `berkeley-softfloat-3/source/s_f32_mulAdd.c` |
+
+- **RTL Model**: `fma_dut_wrapper.sv` 实例化了 cvfpu 的 `fpnew_fma` 模块（固定 FP32 格式），作为待验证设计
+- **C Model**: `softfloat_dpi.cpp` 通过 DPI-C 调用 Berkeley SoftFloat 的 `f32_mulAdd` 函数，作为 golden reference
+
 ## 依赖
 
 - Verilator (>= 5.0)
