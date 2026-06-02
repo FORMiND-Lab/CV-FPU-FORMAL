@@ -39,17 +39,20 @@ VFLAGS    += -I$(CVFPU_DIR)/src/common_cells/src
 VFLAGS    += -I$(CVFPU_DIR)/src/fpu_div_sqrt_mvp/hdl
 VFLAGS    += -CFLAGS "-I$(SOFTFLOAT_INC) -I$(CSRC_DIR)"
 
-# ---- RTL 源文件 ----
-RTL_SRCS  := $(RTL_DIR)/fma_dut_wrapper.sv
-RTL_SRCS  += $(CVFPU_DIR)/src/fpnew_pkg.sv
+# ---- RTL 源文件（包定义必须最先） ----
+RTL_SRCS  := $(CVFPU_DIR)/src/fpnew_pkg.sv
+RTL_SRCS  += $(TB_DIR)/dpi_softfloat.sv
+RTL_SRCS  += $(RTL_DIR)/fma_dut_wrapper.sv
 RTL_SRCS  += $(CVFPU_DIR)/src/fpnew_classifier.sv
 RTL_SRCS  += $(CVFPU_DIR)/src/fpnew_rounding.sv
 RTL_SRCS  += $(CVFPU_DIR)/src/fpnew_fma.sv
+RTL_SRCS  += $(CVFPU_DIR)/src/common_cells/src/cf_math_pkg.sv
 RTL_SRCS  += $(CVFPU_DIR)/src/common_cells/src/lzc.sv
 RTL_SRCS  += $(CVFPU_DIR)/src/common_cells/src/rr_arb_tree.sv
 
-# ---- C++ 源文件 ----
+# ---- C++ / Testbench 源文件 ----
 CPP_SRCS  := $(CSRC_DIR)/softfloat_dpi.cpp
+CPP_SRCS  += $(CSRC_DIR)/sim_main.cpp
 CPP_SRCS  += $(TB_DIR)/tb_fma_cosim.sv
 
 # ---- Top module ----

@@ -1,0 +1,31 @@
+# Verilator build artifacts
+logs/obj_dir/
+logs/*.vcd
+logs/*.log
+
+# Compiled objects and libraries
+*.o
+*.a
+*.so
+
+# Executables
+tb_fma_cosim
+
+# Waveform files
+*.vcd
+*.fst
+*.wlft
+
+# Third-party dependencies (clone separately)
+third_party/
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

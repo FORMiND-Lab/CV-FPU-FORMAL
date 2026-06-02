@@ -3,25 +3,34 @@
 // 调用 Berkeley SoftFloat 的 f32_mulAdd 实现 FP32 FMA golden model
 //============================================================================
 
+extern "C" {
 #include "softfloat.h"
+}
 #include "softfloat_dpi.h"
 
 #include <cstdio>
 #include <cstring>
 
-// Local helper: convert SoftFloat exception flags to RTL format
+// Helper: flip sign bit of float32_t (SoftFloat has no f32_neg)
+static inline float32_t f32_negate(float32_t f) {
+    f.v ^= 0x80000000u;
+    return f;
+}
+
+// Helper: convert SoftFloat exception flags to RTL format
 // RTL status_t = {NV, DZ, OF, UF, NX} (5 bits)
+// SoftFloat:  inexact=1, underflow=2, overflow=4, infinite=8, invalid=16
 static std::uint32_t softfloat_to_rtl_flags(std::uint_fast8_t sf_flags) {
     std::uint32_t out = 0;
     if (sf_flags & softfloat_flag_invalid)   out |= (1 << 4);  // NV
-    if (sf_flags & softfloat_flag_infinite)  out |= (1 << 3);  // DZ — SoftFloat uses same bit for div-by-zero
+    if (sf_flags & softfloat_flag_infinite)  out |= (1 << 3);  // DZ
     if (sf_flags & softfloat_flag_overflow)  out |= (1 << 2);  // OF
     if (sf_flags & softfloat_flag_underflow) out |= (1 << 1);  // UF
     if (sf_flags & softfloat_flag_inexact)   out |= (1 << 0);  // NX
     return out;
 }
 
-// Local helper: convert RTL rounding mode to SoftFloat rounding mode
+// Helper: convert RTL rounding mode to SoftFloat rounding mode
 // RISC-V: RNE=000, RTZ=001, RDN=010, RUP=011, RMM=100, DYN=111
 static std::uint_fast8_t rtl_to_sf_rm(std::uint32_t rm) {
     switch (rm) {
@@ -52,19 +61,16 @@ void dpi_fmadd_s(
         return;
     }
 
-    // Clear SoftFloat exception flags before operation
+    // Clear SoftFloat exception flags and set rounding mode
     softfloat_exceptionFlags = 0;
+    softfloat_roundingMode   = rtl_to_sf_rm(rm);  // global, not per-call argument
 
-    // Convert to SoftFloat float32_t
-    float32_t fa = {.v = a};
-    float32_t fb = {.v = b};
-    float32_t fc = {.v = c};
+    float32_t fa  = {.v = a};
+    float32_t fb  = {.v = b};
+    float32_t fc  = {.v = c};
 
-    // Perform fused multiply-add
-    std::uint_fast8_t sf_rm = rtl_to_sf_rm(rm);
-    float32_t fres = f32_mulAdd(fa, fb, fc, sf_rm);
+    float32_t fres = f32_mulAdd(fa, fb, fc);
 
-    // Capture exception flags AFTER operation
     *fflags = softfloat_to_rtl_flags(softfloat_exceptionFlags);
     *result = fres.v;
 }
@@ -88,15 +94,14 @@ void dpi_fmsub_s(
     }
 
     softfloat_exceptionFlags = 0;
+    softfloat_roundingMode   = rtl_to_sf_rm(rm);
 
     float32_t fa  = {.v = a};
     float32_t fb  = {.v = b};
     float32_t f_c = {.v = c};
-    // fmsub: negate c
-    float32_t fnc = f32_neg(f_c);
+    float32_t fnc = f32_negate(f_c);  // fmsub: negate c
 
-    std::uint_fast8_t sf_rm = rtl_to_sf_rm(rm);
-    float32_t fres = f32_mulAdd(fa, fb, fnc, sf_rm);
+    float32_t fres = f32_mulAdd(fa, fb, fnc);
 
     *fflags = softfloat_to_rtl_flags(softfloat_exceptionFlags);
     *result = fres.v;
@@ -121,15 +126,14 @@ void dpi_fnmadd_s(
     }
 
     softfloat_exceptionFlags = 0;
+    softfloat_roundingMode   = rtl_to_sf_rm(rm);
 
     float32_t fa  = {.v = a};
     float32_t fb  = {.v = b};
     float32_t fc  = {.v = c};
-    // fnmadd: negate product (negate a)
-    float32_t fna = f32_neg(fa);
+    float32_t fna = f32_negate(fa);  // fnmadd: negate product (negate a)
 
-    std::uint_fast8_t sf_rm = rtl_to_sf_rm(rm);
-    float32_t fres = f32_mulAdd(fna, fb, fc, sf_rm);
+    float32_t fres = f32_mulAdd(fna, fb, fc);
 
     *fflags = softfloat_to_rtl_flags(softfloat_exceptionFlags);
     *result = fres.v;
@@ -154,16 +158,15 @@ void dpi_fnmsub_s(
     }
 
     softfloat_exceptionFlags = 0;
+    softfloat_roundingMode   = rtl_to_sf_rm(rm);
 
     float32_t fa  = {.v = a};
     float32_t fb  = {.v = b};
     float32_t fc  = {.v = c};
-    // fnmsub: negate both product and c
-    float32_t fna  = f32_neg(fa);
-    float32_t fnc  = f32_neg(fc);
+    float32_t fna = f32_negate(fa);  // fnmsub: negate both product and c
+    float32_t fnc = f32_negate(fc);
 
-    std::uint_fast8_t sf_rm = rtl_to_sf_rm(rm);
-    float32_t fres = f32_mulAdd(fna, fb, fnc, sf_rm);
+    float32_t fres = f32_mulAdd(fna, fb, fnc);
 
     *fflags = softfloat_to_rtl_flags(softfloat_exceptionFlags);
     *result = fres.v;
