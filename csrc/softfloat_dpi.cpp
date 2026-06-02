@@ -1,0 +1,170 @@
+//============================================================================
+// softfloat_dpi.cpp — SoftFloat DPI-C 实现
+// 调用 Berkeley SoftFloat 的 f32_mulAdd 实现 FP32 FMA golden model
+//============================================================================
+
+#include "softfloat.h"
+#include "softfloat_dpi.h"
+
+#include <cstdio>
+#include <cstring>
+
+// Local helper: convert SoftFloat exception flags to RTL format
+// RTL status_t = {NV, DZ, OF, UF, NX} (5 bits)
+static std::uint32_t softfloat_to_rtl_flags(std::uint_fast8_t sf_flags) {
+    std::uint32_t out = 0;
+    if (sf_flags & softfloat_flag_invalid)   out |= (1 << 4);  // NV
+    if (sf_flags & softfloat_flag_infinite)  out |= (1 << 3);  // DZ — SoftFloat uses same bit for div-by-zero
+    if (sf_flags & softfloat_flag_overflow)  out |= (1 << 2);  // OF
+    if (sf_flags & softfloat_flag_underflow) out |= (1 << 1);  // UF
+    if (sf_flags & softfloat_flag_inexact)   out |= (1 << 0);  // NX
+    return out;
+}
+
+// Local helper: convert RTL rounding mode to SoftFloat rounding mode
+// RISC-V: RNE=000, RTZ=001, RDN=010, RUP=011, RMM=100, DYN=111
+static std::uint_fast8_t rtl_to_sf_rm(std::uint32_t rm) {
+    switch (rm) {
+        case 0: return softfloat_round_near_even;     // RNE
+        case 1: return softfloat_round_minMag;        // RTZ
+        case 2: return softfloat_round_min;           // RDN
+        case 3: return softfloat_round_max;           // RUP
+        case 4: return softfloat_round_near_maxMag;   // RMM
+        default: return softfloat_round_near_even;    // default RNE
+    }
+}
+
+//============================================================================
+// DPI-C: dpi_fmadd_s — result = a * b + c
+//============================================================================
+void dpi_fmadd_s(
+    int             enable,
+    std::uint32_t   a,
+    std::uint32_t   b,
+    std::uint32_t   c,
+    std::uint32_t   rm,
+    std::uint32_t*  result,
+    std::uint32_t*  fflags
+) {
+    if (!enable) {
+        *result = 0;
+        *fflags = 0;
+        return;
+    }
+
+    // Clear SoftFloat exception flags before operation
+    softfloat_exceptionFlags = 0;
+
+    // Convert to SoftFloat float32_t
+    float32_t fa = {.v = a};
+    float32_t fb = {.v = b};
+    float32_t fc = {.v = c};
+
+    // Perform fused multiply-add
+    std::uint_fast8_t sf_rm = rtl_to_sf_rm(rm);
+    float32_t fres = f32_mulAdd(fa, fb, fc, sf_rm);
+
+    // Capture exception flags AFTER operation
+    *fflags = softfloat_to_rtl_flags(softfloat_exceptionFlags);
+    *result = fres.v;
+}
+
+//============================================================================
+// DPI-C: dpi_fmsub_s — result = a * b - c
+//============================================================================
+void dpi_fmsub_s(
+    int             enable,
+    std::uint32_t   a,
+    std::uint32_t   b,
+    std::uint32_t   c,
+    std::uint32_t   rm,
+    std::uint32_t*  result,
+    std::uint32_t*  fflags
+) {
+    if (!enable) {
+        *result = 0;
+        *fflags = 0;
+        return;
+    }
+
+    softfloat_exceptionFlags = 0;
+
+    float32_t fa  = {.v = a};
+    float32_t fb  = {.v = b};
+    float32_t f_c = {.v = c};
+    // fmsub: negate c
+    float32_t fnc = f32_neg(f_c);
+
+    std::uint_fast8_t sf_rm = rtl_to_sf_rm(rm);
+    float32_t fres = f32_mulAdd(fa, fb, fnc, sf_rm);
+
+    *fflags = softfloat_to_rtl_flags(softfloat_exceptionFlags);
+    *result = fres.v;
+}
+
+//============================================================================
+// DPI-C: dpi_fnmadd_s — result = -(a * b) + c
+//============================================================================
+void dpi_fnmadd_s(
+    int             enable,
+    std::uint32_t   a,
+    std::uint32_t   b,
+    std::uint32_t   c,
+    std::uint32_t   rm,
+    std::uint32_t*  result,
+    std::uint32_t*  fflags
+) {
+    if (!enable) {
+        *result = 0;
+        *fflags = 0;
+        return;
+    }
+
+    softfloat_exceptionFlags = 0;
+
+    float32_t fa  = {.v = a};
+    float32_t fb  = {.v = b};
+    float32_t fc  = {.v = c};
+    // fnmadd: negate product (negate a)
+    float32_t fna = f32_neg(fa);
+
+    std::uint_fast8_t sf_rm = rtl_to_sf_rm(rm);
+    float32_t fres = f32_mulAdd(fna, fb, fc, sf_rm);
+
+    *fflags = softfloat_to_rtl_flags(softfloat_exceptionFlags);
+    *result = fres.v;
+}
+
+//============================================================================
+// DPI-C: dpi_fnmsub_s — result = -(a * b) - c
+//============================================================================
+void dpi_fnmsub_s(
+    int             enable,
+    std::uint32_t   a,
+    std::uint32_t   b,
+    std::uint32_t   c,
+    std::uint32_t   rm,
+    std::uint32_t*  result,
+    std::uint32_t*  fflags
+) {
+    if (!enable) {
+        *result = 0;
+        *fflags = 0;
+        return;
+    }
+
+    softfloat_exceptionFlags = 0;
+
+    float32_t fa  = {.v = a};
+    float32_t fb  = {.v = b};
+    float32_t fc  = {.v = c};
+    // fnmsub: negate both product and c
+    float32_t fna  = f32_neg(fa);
+    float32_t fnc  = f32_neg(fc);
+
+    std::uint_fast8_t sf_rm = rtl_to_sf_rm(rm);
+    float32_t fres = f32_mulAdd(fna, fb, fnc, sf_rm);
+
+    *fflags = softfloat_to_rtl_flags(softfloat_exceptionFlags);
+    *result = fres.v;
+}
