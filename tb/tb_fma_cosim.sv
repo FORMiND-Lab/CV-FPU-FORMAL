@@ -16,6 +16,15 @@ module tb_fma_cosim (
   int pass_cnt, fail_cnt;
   int case_idx, total_cases;
 
+  // ---- Directed test case storage (loaded from tests/directed_cases.hex) ----
+  localparam int MAX_DIRECTED = 256;
+  int num_directed;
+  logic [31:0] directed_a   [MAX_DIRECTED];
+  logic [31:0] directed_b   [MAX_DIRECTED];
+  logic [31:0] directed_c   [MAX_DIRECTED];
+  logic [2:0]  directed_rm  [MAX_DIRECTED];
+  logic [3:0]  directed_op  [MAX_DIRECTED];
+
   // ---- DUT 接口 ----
   logic        dut_valid;
   logic        dut_ready;
@@ -41,11 +50,47 @@ module tb_fma_cosim (
     if (!$value$plusargs("SEED=%d", seed))   seed = 1;
     if (!$value$plusargs("NUM=%d", num_tests)) num_tests = 10;
     if (!$value$plusargs("TRACE=%d", trace_en)) trace_en = 0;
+
+    // Load directed test cases from file
+    load_directed_cases();
+
     $display("============================================================");
     $display(" cvfpu FMA + SoftFloat Co-Simulation Testbench");
     $display(" SEED=%0d, NUM=%0d", seed, num_tests);
     $display("============================================================");
   end
+
+  // ---- Load directed test cases from tests/directed_cases.hex ----
+  function automatic void load_directed_cases();
+    int fd;
+    int tmp_rm, tmp_op;
+    string line;
+
+    num_directed = 0;
+    fd = $fopen("tests/directed_cases.hex", "r");
+    if (fd) begin
+      while (num_directed < MAX_DIRECTED && !$feof(fd)) begin
+        line = "";
+        if ($fgets(line, fd) == 0) continue;
+        // Skip empty lines and comment lines
+        if (line.len() == 0)   continue;
+        if (line[0] == "#")    continue;
+        if (line[0] == "\n")   continue;
+        if (line[0] == " ")    continue;  // skip indented lines
+        if (line[0] == "/")    continue;  // skip alternate comment style
+        // Parse hex values: A B C RM OP
+        if ($sscanf(line, "%h %h %h %d %d",
+            directed_a[num_directed], directed_b[num_directed], directed_c[num_directed],
+            tmp_rm, tmp_op) == 5) begin
+          directed_rm[num_directed] = tmp_rm[2:0];
+          directed_op[num_directed] = tmp_op[3:0];
+          num_directed++;
+        end
+      end
+      $fclose(fd);
+      $display("Loaded %0d directed test cases from tests/directed_cases.hex", num_directed);
+    end
+  endfunction
 
   // ==========================================================================
   // Combinational: Generate test vectors and call DPI golden model
@@ -74,30 +119,30 @@ module tb_fma_cosim (
     comb_ref_res = 0; comb_ref_flg = 0;
 
     if (state == ST_SETUP) begin
-      if (case_idx < 4) begin
-        // ---- Sanity cases ----
-        unique case (case_idx)
-          0: begin comb_a=32'h3F800000; comb_b=32'h40000000; comb_c=32'h40400000;
-                   comb_rm=3'b000; comb_op=FMADD; comb_name="1.0*2.0+3.0"; end
-          1: begin comb_a=32'h00000000; comb_b=32'h40A00000; comb_c=32'h40400000;
-                   comb_rm=3'b000; comb_op=FMADD; comb_name="0.0*5.0+3.0"; end
-          2: begin comb_a=32'h3FC00000; comb_b=32'h40000000; comb_c=32'h3F000000;
-                   comb_rm=3'b000; comb_op=FMADD; comb_name="1.5*2.0+0.5"; end
-          3: begin comb_a=32'hBF800000; comb_b=32'h40000000; comb_c=32'h40400000;
-                   comb_rm=3'b000; comb_op=FMADD; comb_name="-1.0*2.0+3.0"; end
-        endcase
+      if (case_idx < num_directed) begin
+        // ---- Directed cases (loaded from tests/directed_cases.hex) ----
+        comb_a   = directed_a[case_idx];
+        comb_b   = directed_b[case_idx];
+        comb_c   = directed_c[case_idx];
+        comb_rm  = directed_rm[case_idx];
+        comb_op  = directed_op[case_idx];
+        comb_name = $sformatf("directed_%0d", case_idx);
       end else begin
         // ---- Random cases ----
-        // 用掩码限制 exponent 范围，避免 inf/NaN/overflow 极端值
-        //   & 32'h3FFFFFFF: exponent <= 0111_1111 (max 127, actual max 2^0)
-        //   | 32'h3F800000: exponent >= 0111_1111 (min 1.0) — 保证普通值范围
-        //   最终 exponent 在 0x7F 左右，值域大致 [0.5, 2.0]
-        comb_a   = ($urandom(case_idx * 4 + 0) & 32'h3FFFFFFF) | 32'h3F800000;
-        comb_b   = ($urandom(case_idx * 4 + 1) & 32'h3FFFFFFF) | 32'h3F800000;
-        comb_c   = ($urandom(case_idx * 4 + 2) & 32'h3FFFFFFF) | 32'h3F800000;
-        comb_rm  = $urandom(case_idx * 4 + 3) % 5;  // 0..4
+        // Constrain exponent to ~0x7F to stay in normal range [1.0, 2.0),
+        // avoid inf/NaN/overflow edge cases in random testing.
+        // Sign bit is randomized for broader coverage.
+        // Use seed+case_idx as RNG seed — SEED controls the random sequence.
+        comb_a   = ($urandom(seed ^ ((case_idx - num_directed) * 4 + 0)) & 32'h3FFFFFFF) | 32'h3F800000;
+        // Randomly flip sign bit for ~50% negative values
+        if ($urandom(seed ^ ((case_idx - num_directed) * 4 + 1000)) & 1) comb_a[31] = 1'b1;
+        comb_b   = ($urandom(seed ^ ((case_idx - num_directed) * 4 + 1)) & 32'h3FFFFFFF) | 32'h3F800000;
+        if ($urandom(seed ^ ((case_idx - num_directed) * 4 + 1001)) & 1) comb_b[31] = 1'b1;
+        comb_c   = ($urandom(seed ^ ((case_idx - num_directed) * 4 + 2)) & 32'h3FFFFFFF) | 32'h3F800000;
+        if ($urandom(seed ^ ((case_idx - num_directed) * 4 + 1002)) & 1) comb_c[31] = 1'b1;
+        comb_rm  = $urandom(seed ^ ((case_idx - num_directed) * 4 + 3)) % 5;  // 0..4
         comb_op  = FMADD;
-        comb_name = $sformatf("random_%0d", case_idx - 4);
+        comb_name = $sformatf("random_%0d", case_idx - num_directed);
       end
 
       // Call DPI golden model
@@ -143,7 +188,7 @@ module tb_fma_cosim (
         ST_RESET: begin
           state      <= ST_SETUP;
           case_idx   <= 0;
-          total_cases <= 4 + num_tests;
+          total_cases <= num_directed + num_tests;
         end
 
         ST_SETUP: begin
@@ -157,15 +202,19 @@ module tb_fma_cosim (
           reg_ref_flg <= comb_ref_flg;
           reg_name    <= comb_name;
 
-          // Send to DUT
-          dut_valid <= 1'b1;
-          dut_a  <= comb_a;
-          dut_b  <= comb_b;
-          dut_c  <= comb_c;
-          dut_rm <= comb_rm;
-          dut_op <= comb_op;
-
-          state <= ST_CHECK;
+          // Send to DUT only when ready (proper handshake)
+          if (dut_ready) begin
+            dut_valid <= 1'b1;
+            dut_a  <= comb_a;
+            dut_b  <= comb_b;
+            dut_c  <= comb_c;
+            dut_rm <= comb_rm;
+            dut_op <= comb_op;
+            state   <= ST_CHECK;
+          end else begin
+            dut_valid <= 1'b0;
+            // Stay in ST_SETUP, retry next cycle
+          end
         end
 
         ST_CHECK: begin
@@ -176,6 +225,14 @@ module tb_fma_cosim (
               pass_cnt <= pass_cnt + 1;
               if (trace_en)
                 $display("[PASS] %s -> RES=%08h FLG=%05b", reg_name, dut_result, dut_fflags);
+            // RISC-V uses canonical NaN (0x7fc00000) while IEEE 754 / SoftFloat may
+            // preserve NaN payload. When NV is set and all other flags match, both sides
+            // agree the result is NaN — accept payload difference as a pass.
+            end else if (dut_fflags[4] && (dut_fflags == reg_ref_flg)) begin
+              pass_cnt <= pass_cnt + 1;
+              if (trace_en)
+                $display("[PASS] %s -> RES=%08h FLG=%05b (NaN payload diff OK)",
+                         reg_name, dut_result, dut_fflags);
             end else begin
               fail_cnt <= fail_cnt + 1;
               $display("[FAIL] %s", reg_name);

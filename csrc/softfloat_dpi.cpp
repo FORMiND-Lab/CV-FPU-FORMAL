@@ -20,10 +20,12 @@ static inline float32_t f32_negate(float32_t f) {
 // Helper: convert SoftFloat exception flags to RTL format
 // RTL status_t = {NV, DZ, OF, UF, NX} (5 bits)
 // SoftFloat:  inexact=1, underflow=2, overflow=4, infinite=8, invalid=16
+// NOTE: softfloat_flag_infinite is intentionally NOT mapped — FMA never sets DZ
+// (divide-by-zero), and infinite results from FMA are caused by overflow (OF+NX)
+// or invalid operations (NV), both already handled.
 static std::uint32_t softfloat_to_rtl_flags(std::uint_fast8_t sf_flags) {
     std::uint32_t out = 0;
     if (sf_flags & softfloat_flag_invalid)   out |= (1 << 4);  // NV
-    if (sf_flags & softfloat_flag_infinite)  out |= (1 << 3);  // DZ
     if (sf_flags & softfloat_flag_overflow)  out |= (1 << 2);  // OF
     if (sf_flags & softfloat_flag_underflow) out |= (1 << 1);  // UF
     if (sf_flags & softfloat_flag_inexact)   out |= (1 << 0);  // NX
