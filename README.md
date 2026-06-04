@@ -1,135 +1,137 @@
-# cvfpu FMA + SoftFloat Co-Simulation 样例项目
+# cvfpu FP32 FMA 协同验证项目
 
-## 项目目标
-
-本样例项目建立了一个最小可运行的协同验证环境：
+本项目对 OpenHW Group cvfpu 的 FP32 融合乘加 (FMA) 模块建立**双重验证闭环**：
 
 ```
-随机/定向测试输入 a, b, c, rounding mode
-        │
-        ├── cvfpu fpnew_fma RTL
-        │       输出 result_rtl + status_rtl
-        │
-        └── SoftFloat golden model
-                输出 result_ref + fflags_ref
-
-比较：
-result_rtl == result_ref
-status_rtl == fflags_ref
+                           输入 (a, b, c, rounding_mode)
+                                      │
+              ┌───────────────────────┴───────────────────────┐
+              ▼                                               ▼
+┌──────────────────────────┐                 ┌──────────────────────────┐
+│  Cosim (仿真验证)          │                 │  Hector (形式化验证)       │
+│                           │                 │                          │
+│  Verilator + DPI-C        │                 │  VC Formal Hector DPV    │
+│  随机/定向采样 ~5000 cases │                 │  全空间穷举 ~2^97 输入     │
+│  秒级                     │                 │  小时级                   │
+└──────────────────────────┘                 └──────────────────────────┘
+              │                                               │
+              ▼                                               ▼
+     result_rtl vs result_ref                    lemma result_eq, except_eq
+     status_rtl vs fflags_ref                    case split: inf/NaN/norm/dnorm
 ```
-
-第一阶段只验证 **FP32 fused multiply-add (FMADD)**。
-
-## 仿真架构
-
-```
-sim_main.cpp (C++)                 tb_fma_cosim.sv (SystemVerilog)
-     │                                        │
-     ├─ 驱动 clk, rst_n ──────────────────────┤
-     │                                        │
-     │                        ┌─ always @* ──────────────────────┐
-     │                        │  生成测试向量 + 调用 DPI SoftFloat │
-     │                        │  得到 golden result / fflags      │
-     │                        └──────────────────────────────────┘
-     │                                        │
-     │                        ┌─ always_ff FSM ──────────────────┐
-     │                        │  ST_SETUP → ST_CHECK → next case │
-     │                        │  驱动 DUT valid/operands         │
-     │                        │  比较 RTL output vs golden       │
-     │                        └──────────────────────────────────┘
-     │                                        │
-     └─ eval() 每半周期 ───────────────────────┘
-```
-
-- 仿真方式：Verilator cycle-based，C++ 驱动时钟，无 `--timing` 依赖
-- DPI 调用：组合逻辑 `always @*` 中调用 SoftFloat `f32_mulAdd`
-- 比较策略：逐 case 同步比较 result 和 fflags
 
 ## 项目结构
 
 ```
-test_cv_fpv/
-├── cvfpu/                        # cvfpu RTL 源码
-│   ├── src/                      # （fpnew_fma, fpnew_pkg, ...）
-│   └── ...
-├── berkeley-softfloat-3/         # Berkeley SoftFloat 参考模型
-├── cosim/                        # ★ 本协同验证项目
-│   ├── Makefile                  # 编译脚本 (softfloat / build / run / wave / clean)
+cosim/
+├── README.md
+├── Makefile                          # cosim: Verilator 编译 + 仿真
+├── run_eda.sh                        # Docker 启动脚本 (EDA 工具环境)
+├── .gitignore
+│
+├── rtl/
+│   └── fma_dut_wrapper.sv            # cosim DUT wrapper (valid/ready 接口)
+├── tb/
+│   ├── tb_fma_cosim.sv               # cosim testbench (FSM + DPI-C)
+│   └── dpi_softfloat.sv              # DPI-C 函数声明
+├── csrc/
+│   ├── sim_main.cpp                  # Verilator 仿真入口
+│   ├── softfloat_dpi.cpp             # DPI-C 实现 (SoftFloat golden)
+│   └── softfloat_dpi.h               # DPI-C 头文件
+├── tests/
+│   ├── directed_cases.hex            # 定向测试用例
+│   └── random_seed_list.txt          # 随机种子列表
+├── logs/                             # cosim 仿真产物 (gitignored)
+│
+├── hector/                           # ★ Hector 形式化验证
 │   ├── README.md
-│   ├── .gitignore
-│   ├── rtl/
-│   │   └── fma_dut_wrapper.sv    # 包装 fpnew_fma，固定 FP32
-│   ├── tb/
-│   │   ├── tb_fma_cosim.sv       # Testbench (FSM + always @* 组合 DPI)
-│   │   └── dpi_softfloat.sv      # DPI-C 函数声明 (package)
-│   ├── csrc/
-│   │   ├── sim_main.cpp          # Verilator 仿真入口 (C++ main, 驱动时钟)
-│   │   ├── softfloat_dpi.cpp     # DPI-C 实现 (调 SoftFloat f32_mulAdd)
-│   │   └── softfloat_dpi.h       # DPI-C 头文件
-│   └── logs/                     # 构建产物 + 波形
-└── temp/                         # 临时文档
+│   ├── run/                          # vcf 运行目录 (中间产物在此)
+│   ├── spec/fma_spec.cpp             # C++ spec (SoftFloat golden)
+│   ├── rtl/fma_hector_wrap.sv        # SV impl wrapper (go/valid 接口)
+│   ├── tcl/command_script_fma32.tcl  # TCL 控制脚本
+│   └── scripts/run_hector.sh         # 一键启动
+│
+├── third_party/                      # 第三方依赖 (内嵌, 含本地修改)
+│   ├── README.md                     # 依赖来源与修改说明
+│   ├── cvfpu/                        # cvfpu RTL (Solderpad License)
+│   ├── softfloat/                    # SoftFloat 3e (BSD-like, Hector 兼容修改)
+│   └── example/                      # DPV_Advanced 参考样例 (gitignored)
+│
+└── temp/                             # 项目文档
+    ├── cosim_to_hector_migration_plan.md
+    └── hector_open_issues.md
 ```
 
 ## 快速开始
 
+### 环境准备
+
 ```bash
-# 0. 进入项目目录
+# 克隆项目后，确保依赖就位（third_party/ 已内含）
 cd cosim
 
-# 1. 拉取依赖
+# 如果还需要外部依赖（cosim Makefile 仍引用 ../cvfpu 和 ../berkeley-softfloat-3）：
 git clone https://github.com/openhwgroup/cvfpu ../cvfpu
-git -C ../cvfpu submodule update --init --recursive
 git clone https://github.com/ucb-bar/berkeley-softfloat-3 ../berkeley-softfloat-3
-
-# 2. 一键编译 + 运行
-make all NUM=100
-
-# 3. 大规模回归
-make run NUM=10000
-
-# 4. 查看波形
-make wave
-
-# 5. 清理
-make clean
 ```
+
+### Cosim 仿真验证
+
+```bash
+make all NUM=100      # 编译 + 小规模运行
+make run NUM=10000    # 大规模回归
+make wave             # 查看波形 (GTKWave)
+make clean            # 清理
+```
+
+### Hector 形式化验证
+
+```bash
+# Docker 环境 (宿主机)
+./run_eda.sh
+
+# 容器内
+cd /home/eda
+./hector/scripts/run_hector.sh
+# vcf> make
+# vcf> run_main
+```
+
+详见 [hector/README.md](hector/README.md)。
 
 ## 验证层次
 
-| 层级 | 内容 | 状态 |
-|------|------|------|
-| Sanity | 4 个手工用例 (1.0×2.0+3.0 等) | ✅ 已实现 |
-| Random | 随机 32-bit pattern (约束在正常浮点范围) | ✅ 已实现 |
-| Corner | ±0, ±∞, NaN, sNaN, subnormal, overflow, underflow | ⏳ 待实现 |
-| Full Ops | FMSUB / FNMADD / FNMSUB | ⏳ 待实现 |
+| 层级 | 内容 | Cosim | Hector |
+|------|------|-------|--------|
+| Sanity | 手工用例 (1.0×2.0+3.0 等) | ✅ | — |
+| Random | 随机 32-bit (正常浮点范围) | ✅ | — |
+| Formal | 全空间穷举等价证明 | — | 🔄 搭建中 |
+| Corner | ±0, ±∞, NaN, sNaN, subnormal | ⏳ | 🔄 case split 已覆盖 |
+| Full Ops | FMSUB / FNMADD / FNMSUB | ⏳ | ⏳ |
 
-## 验证结果
+## 核心模型
 
-```
-$ make run NUM=5000
-============================================================
- cvfpu FMA + SoftFloat Co-Simulation Testbench
- SEED=1, NUM=5000
-============================================================
- PASS: 5004, FAIL: 0, TOTAL: 5004
-============================================================
-ALL TESTS PASSED
-```
-
-## 核心模型文件
-
-| 角色 | 封装文件 (wrapper) | 被封装的核心文件 |
-|------|-------------------|------------------|
-| RTL Model (DUT) | `cosim/rtl/fma_dut_wrapper.sv` | `cvfpu/src/fpnew_fma.sv` |
-| C Model (Golden) | `cosim/csrc/softfloat_dpi.cpp` | `berkeley-softfloat-3/source/s_f32_mulAdd.c` |
-
-- **RTL Model**: `fma_dut_wrapper.sv` 实例化了 cvfpu 的 `fpnew_fma` 模块（固定 FP32 格式），作为待验证设计
-- **C Model**: `softfloat_dpi.cpp` 通过 DPI-C 调用 Berkeley SoftFloat 的 `f32_mulAdd` 函数，作为 golden reference
+| 角色 | Cosim | Hector |
+|------|-------|--------|
+| RTL (DUT) | `rtl/fma_dut_wrapper.sv` → `fpnew_fma` | `hector/rtl/fma_hector_wrap.sv` → `fpnew_fma` |
+| Golden | `csrc/softfloat_dpi.cpp` → SoftFloat `f32_mulAdd` | `hector/spec/fma_spec.cpp` → SoftFloat `f32_mulAdd` |
+| 接口 | valid/ready 握手 | go/valid 脉冲 |
+| 比较 | SV FSM 逐 case | TCL lemma 形式化断言 |
 
 ## 依赖
 
-- Verilator (>= 5.0)
-- GCC / Clang (C++11)
-- GNU Make
-- Berkeley SoftFloat 3e (放置于 `../berkeley-softfloat-3/`)
-- GTKWave (可选，用于波形查看)
+| 工具 | 用途 | 版本 |
+|------|------|------|
+| Verilator | cosim 仿真 | >= 5.0 |
+| GCC / Clang | C++ 编译 | C++11 |
+| VC Formal (vcf/svi) | Hector 形式化验证 | W-2024.09-SP1 |
+| Berkeley SoftFloat | Golden reference | 3e |
+| GTKWave | 波形查看 (可选) | — |
+
+## 参考
+
+- [cosim → Hector 迁移计划](temp/cosim_to_hector_migration_plan.md)
+- [Hector 开放问题](temp/hector_open_issues.md)
+- [第三方依赖说明](third_party/README.md)
+- [cvfpu (OpenHW Group)](https://github.com/openhwgroup/cvfpu)
+- [Berkeley SoftFloat](https://github.com/ucb-bar/berkeley-softfloat-3)
