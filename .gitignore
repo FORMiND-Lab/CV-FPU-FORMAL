@@ -17,7 +17,7 @@ tb_fma_cosim
 *.wlft
 
 # Third-party dependencies (clone separately)
-third_party/
+third_party/example/
 
 # Editor files
 *.swp
