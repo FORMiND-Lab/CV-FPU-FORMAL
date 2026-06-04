@@ -1,39 +1,57 @@
 # Hector DPV — FP32 FMA 形式化等价验证
 
-> 全空间穷举证明：cvfpu fpnew_fma (RTL) == Berkeley SoftFloat f32_mulAdd (C)
+> cvfpu fpnew_fma (RTL) == Berkeley SoftFloat f32_mulAdd (C)
 
 ## 快速开始
 
 ```bash
-# 0. 启动 EDA Docker 容器（如需要，在宿主机 cosim/ 目录下）
+# 0. 启动 EDA Docker 容器（宿主机 cosim/ 目录下）
 ./run_eda.sh
 
 # 1. 容器内，从项目根目录运行
-cd /home/eda
-./hector/scripts/run_hector.sh
 
-# 2. 在 vcf> 提示符下
-vcf> make        # 编译 spec + impl, compose
-vcf> run_main    # 启动证明（case split → parallel solve）
+# 快速冒烟：11 个 directed cases，秒级
+cd /home/eda
+./hector/scripts/run_directed.sh
+# vcf> make
+# vcf> run
+
+# 完整证明：全空间穷举，小时级
+./hector/scripts/run_hector.sh
+# vcf> make
+# vcf> run_main
 ```
 
-`run_hector.sh` 自动 `cd hector/run/` 后调用 `vcf`，所有中间文件（`vcst_rtdb/`、`vcf.log` 等）都留在 `hector/run/` 中，不污染项目根目录。
+两个脚本都自动 `cd hector/run/` 后调用 `vcf`，所有中间产物留在 `hector/run/` 中。
+
+## 两个 TCL 的区别
+
+| | `_directed.tcl` | `command_script_fma32.tcl` |
+|---|---|---|
+| 输入空间 | 11 个固定 case | 全空间 ~2^97 |
+| 约束方式 | `assume` OR 锁定具体值 | `case_split` 11 个分支逐类穷举 |
+| 舍入模式 | 固定 RNE (0) | 全部 5 种 (0-4) |
+| 耗时 | 秒~分钟 | 小时 |
+| 入口 proc | `run` | `run_main` |
+| 启动脚本 | `run_directed.sh` | `run_hector.sh` |
 
 ## 目录结构
 
 ```
 hector/
 ├── README.md
-├── run/                                # vcf 运行目录（所有中间产物在这里）
+├── run/                                # vcf 运行目录（所有产物在这里）
 │   └── .gitkeep
 ├── spec/
-│   └── fma_spec.cpp                    # C++ Hector spec (SoftFloat golden)
+│   └── fma_spec.cpp                    # C++ spec (SoftFloat golden)
 ├── rtl/
 │   └── fma_hector_wrap.sv              # SV wrapper (go/valid 接口)
 ├── tcl/
-│   └── command_script_fma32.tcl        # TCL 控制脚本
+│   ├── command_script_fma32.tcl        # 完整证明 (case split)
+│   └── command_script_fma32_directed.tcl  # 快速冒烟 (directed cases)
 └── scripts/
-    └── run_hector.sh                   # 一键启动脚本
+    ├── run_hector.sh                   # 启动完整证明
+    └── run_directed.sh                 # 启动快速冒烟
 ```
 
 ## 架构
@@ -51,7 +69,6 @@ hector/
               └────────── map_by_name ─────────────┘
               ┌──────────────────────────────────┐
               │  lemma: result_eq, except_eq      │
-              │  case split: inf/NaN/norm/dnorm   │
               └──────────────────────────────────┘
 ```
 
@@ -59,10 +76,9 @@ hector/
 
 | 步骤 | 命令 | 说明 |
 |------|------|------|
-| 1 | `make` 或 `compile_spec` | cppan 编译 C++ spec + SoftFloat 源文件 |
-| 2 | `make` 或 `compile_impl` | vcs 编译 SV RTL (fpnew_fma + wrapper) |
-| 3 | `make` 或 `compose` | 建立 spec ↔ impl 的 formal model |
-| 4 | `run_main` | 穷举证明 (case split → parallel solve) |
+| 1 | `make` | 编译 spec (cppan) + impl (vcs) + compose |
+| 2 | `run` | 快速冒烟：验证 11 个 directed cases |
+| 2 | `run_main` | 完整证明：case split → parallel solve |
 
 ## 配置
 
@@ -75,7 +91,7 @@ parameter int unsigned NUM_PIPE_REGS = 0   // 当前：最小延迟（1 cycle）
 parameter int unsigned NUM_PIPE_REGS = 1   // 1 级流水线
 ```
 
-然后在 `command_script_fma32.tcl` 的 `ual_main` 中调整 lemma 的 phase：
+然后在 TCL 的 `ual_main` (或 `ual`) 中调整 phase：
 
 ```tcl
 # NUM_PIPE_REGS=0: impl 比 spec 晚 1 拍
@@ -87,8 +103,6 @@ lemma result_eq = spec.result(1) == impl.result(3)
 
 ### 舍入模式
 
-RISC-V 定义 5 种舍入模式，通过 `assume` 约束范围：
-
 | 编码 | 名称 | 说明 |
 |------|------|------|
 | 000 | RNE | Round to Nearest, ties to Even |
@@ -99,18 +113,16 @@ RISC-V 定义 5 种舍入模式，通过 `assume` 约束范围：
 
 ## 与 cosim 仿真的关系
 
-| 维度 | cosim (Verilator) | Hector (形式化) |
-|------|-------------------|-------------------|
-| 验证方式 | 随机采样 (N=5000) | 全空间穷举 (~2^97) |
-| 耗时 | 秒级 | 小时级 |
-| 覆盖度 | 统计采样 | 100% 数学证明 |
-| 用途 | 快速回归、debug | 签核级完备证明 |
-
-两者互补：Hector 出 CEX → cosim 回放反例定位 bug；cosim 出 FAIL → RTL 有 bug，Hector 也应能找到。
+| 维度 | cosim (Verilator) | Hector directed | Hector full |
+|------|-------------------|-----------------|-------------|
+| 验证方式 | 随机采样 (N=5000) | 11 个 fixed cases | 全空间穷举 (~2^97) |
+| 耗时 | 秒级 | 秒~分钟 | 小时级 |
+| 覆盖度 | 统计采样 | 基本场景 | 100% 数学证明 |
+| 用途 | 快速回归、debug | 流程冒烟 | 签核级完备证明 |
 
 ## 已知问题
 
-详见 `../temp/hector_open_issues.md`。主要待解决：
+详见 `../temp/hector_open_issues.md`：
 
 1. **HDPS 子证明**：fpnew_fma 内部乘法器和前导零单元的 cutpoint 信号名需确定
 2. **NaN payload**：RISC-V canonical NaN vs IEEE 754 NaN payload 差异

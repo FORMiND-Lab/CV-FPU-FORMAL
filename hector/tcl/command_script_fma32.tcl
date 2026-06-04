@@ -74,8 +74,8 @@ proc ual_main {} {
     map_by_name -inputs -specphase 1 -implphase 1
     assume spec.rounding_mode(1) < 5
 
-    lemma result_eq  = spec.result(1)     == impl.result(2)
-    lemma except_eq  = spec.exceptions(1) == impl.exceptions(2)
+    lemma result_eq  = spec.result(1)     == impl.result(1)
+    lemma except_eq  = spec.exceptions(1) == impl.exceptions(1)
 
     set_resource_limit 36000
     set_hector_multiple_solve_scripts true
