@@ -1,7 +1,5 @@
-# Verilator build artifacts
-logs/obj_dir/
-logs/*.vcd
-logs/*.log
+# ---- Verilator / Simulation build artifacts ----
+logs/
 
 # Compiled objects and libraries
 *.o
@@ -16,16 +14,25 @@ tb_fma_cosim
 *.fst
 *.wlft
 
-# Third-party dependencies (clone separately)
-third_party/example/
+# ---- Hector / VC Formal artifacts ----
+# Run via ./hector/scripts/run_hector.sh → all in hector/run/
+hector/run/*
+!hector/run/.gitkeep
 
-# Editor files
+# ---- Third-party ----
+# Examples (reference only, clone separately)
+third_party/example/
+# Build artifacts (compiled .o / .a)
+third_party/softfloat/build/
+third_party/softfloat/lib/
+
+# ---- Editor ----
 *.swp
 *.swo
 *~
 .vscode/
 .idea/
 
-# OS files
+# ---- OS ----
 .DS_Store
 Thumbs.db

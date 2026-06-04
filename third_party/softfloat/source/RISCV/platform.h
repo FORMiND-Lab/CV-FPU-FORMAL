@@ -47,8 +47,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 /*----------------------------------------------------------------------------
+| Hector compatibility: do NOT use GCC builtins/intrinsics.
+| SOFTFLOAT_BUILTIN_CLZ and SOFTFLOAT_INTRINSIC_INT128 are deliberately NOT
+| defined so SoftFloat falls back to pure C implementations:
+|   - s_countLeadingZeros*() replaces __builtin_clz*
+|   - multi-precision C functions replace __int128 operations
+| "opts-GCC.h" is deliberately NOT included.
 *----------------------------------------------------------------------------*/
-#define SOFTFLOAT_BUILTIN_CLZ 1
-#define SOFTFLOAT_INTRINSIC_INT128 1
-#include "opts-GCC.h"
+// #define SOFTFLOAT_BUILTIN_CLZ 1
+// #define SOFTFLOAT_INTRINSIC_INT128 1
+// #include "opts-GCC.h"
 
