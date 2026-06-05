@@ -33,6 +33,12 @@ third_party/softfloat/lib/
 .vscode/
 .idea/
 
+# ---- CEX replay artifacts ----
+tests/cex_*.hex
+logs/obj_dir_cex/
+logs/*.vcd
+logs/*.log
+
 # ---- OS ----
 .DS_Store
 Thumbs.db

@@ -12,6 +12,7 @@ TB_DIR        := $(PROJ_DIR)/tb
 CSRC_DIR      := $(PROJ_DIR)/csrc
 LOG_DIR       := $(PROJ_DIR)/logs
 TEST_DIR      := $(PROJ_DIR)/tests
+HECTOR_DIR    := $(PROJ_DIR)/hector
 THIRD_PARTY   := $(PROJ_DIR)/third_party
 
 # ---- 第三方依赖路径 ----
@@ -67,12 +68,13 @@ VFLAGS    += -Wno-fatal -Wno-UNOPTFLAT -Wno-UNUSEDSIGNAL
 VFLAGS    += -I$(CVFPU_DIR)
 VFLAGS    += -I$(COMMON_CELLS)/include
 VFLAGS    += -I$(COMMON_CELLS)/src
+VFLAGS    += -I$(HECTOR_DIR)/rtl
 VFLAGS    += -CFLAGS "-I$(SOFTFLOAT_INC) -I$(CSRC_DIR)"
 
 # ---- RTL 源文件（包定义必须最先） ----
 RTL_SRCS  := $(CVFPU_DIR)/fpnew_pkg.sv
-RTL_SRCS  += $(TB_DIR)/dpi_softfloat.sv
-RTL_SRCS  += $(RTL_DIR)/fma_dut_wrapper.sv
+RTL_SRCS  += $(TB_DIR)/dpi_fma_golden.sv
+RTL_SRCS  += $(HECTOR_DIR)/rtl/fma_hector_wrap.sv
 RTL_SRCS  += $(CVFPU_DIR)/fpnew_classifier.sv
 RTL_SRCS  += $(CVFPU_DIR)/fpnew_rounding.sv
 RTL_SRCS  += $(CVFPU_DIR)/fpnew_fma.sv
@@ -81,15 +83,20 @@ RTL_SRCS  += $(COMMON_CELLS)/src/lzc.sv
 RTL_SRCS  += $(COMMON_CELLS)/src/rr_arb_tree.sv
 
 # ---- C++ / Testbench 源文件 ----
-CPP_SRCS  := $(CSRC_DIR)/softfloat_dpi.cpp
+CPP_SRCS  := $(CSRC_DIR)/fma_golden_dpi.cpp
 CPP_SRCS  += $(CSRC_DIR)/sim_main.cpp
 CPP_SRCS  += $(TB_DIR)/tb_fma_cosim.sv
 
 # ---- Top module ----
 TOP_MOD   := tb_fma_cosim
+CEX_TOP_MOD := tb_fma_cex
+
+# ---- CEX 参数 (可通过命令行覆盖) ----
+CEX_FILE ?= $(TEST_DIR)/cex_cases.hex
+CEX_ARGS := +CEX_FILE=$(CEX_FILE)
 
 # ---- 目标 ----
-.PHONY: all softfloat build run wave clean
+.PHONY: all softfloat build run cex wave clean
 
 all: softfloat build run
 
@@ -131,7 +138,27 @@ run: build
 wave:
 	gtkwave $(LOG_DIR)/fma_cosim.vcd &
 
+# ---- CEX replay (file-driven, multi-case) ----
+# Usage:
+#   make cex                                          # default: tests/cex_cases.hex
+#   make cex CEX_FILE=tests/my_cases.hex              # custom file
+cex: softfloat
+	@echo "=== Building CEX Replay Testbench ==="
+	mkdir -p $(LOG_DIR)
+	$(VERILATOR) $(VFLAGS) \
+		-top $(CEX_TOP_MOD) \
+		$(RTL_SRCS) \
+		$(CSRC_DIR)/fma_golden_dpi.cpp \
+		$(CSRC_DIR)/sim_main_cex.cpp \
+		$(TB_DIR)/tb_fma_cex.sv \
+		$(SOFTFLOAT_LIB) \
+		-LDFLAGS "-lstdc++ -lm" \
+		-o $(CEX_TOP_MOD) \
+		--Mdir $(LOG_DIR)/obj_dir_cex
+	@echo "=== Running CEX Replay ==="
+	$(LOG_DIR)/obj_dir_cex/$(CEX_TOP_MOD) $(CEX_ARGS)
+
 # ---- 清理 ----
 clean:
-	rm -rf $(LOG_DIR)/obj_dir $(LOG_DIR)/*.vcd $(LOG_DIR)/*.log
+	rm -rf $(LOG_DIR)/obj_dir $(LOG_DIR)/obj_dir_cex $(LOG_DIR)/*.vcd $(LOG_DIR)/*.log
 	rm -rf $(SOFTFLOAT_BUILD_DIR)

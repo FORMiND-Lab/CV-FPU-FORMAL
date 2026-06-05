@@ -1,17 +1,27 @@
 //============================================================================
 // tb_fma_cosim.sv — FMA Co-Simulation Testbench (cycle-based FSM)
-// 组合逻辑生成测试向量 + DPI 调用，时序逻辑驱动 DUT 和状态机
+//
+// Interfaces aligned with Hector formal verification platform:
+//   - DPI golden port names match hector/spec/fma_spec.cpp
+//   - DUT wrapper reuses hector/rtl/fma_hector_wrap.sv (go/valid protocol)
+//   - Combinational logic generates test vectors + calls DPI golden model
+//   - Sequential FSM drives DUT via go pulse and checks valid/result
 //============================================================================
 
-import dpi_softfloat_pkg::*;
-import fpnew_pkg::*;
+import dpi_fma_golden_pkg::*;
+
+// Local FMA operation encoding (aligned with fpnew_pkg but self-contained)
+localparam int OP_FMADD  = 0;
+localparam int OP_FMSUB  = 1;
+localparam int OP_FNMADD = 2;
+localparam int OP_FNMSUB = 3;
 
 module tb_fma_cosim (
-  input logic clk,     // 由 C++ sim_main 驱动
-  input logic rst_n    // 由 C++ sim_main 驱动
+  input logic clk,     // driven by C++ sim_main.cpp
+  input logic rst_n    // driven by C++ sim_main.cpp
 );
 
-  // ---- 仿真参数 ----
+  // ---- Simulation parameters ----
   int seed, num_tests, trace_en;
   int pass_cnt, fail_cnt;
   int case_idx, total_cases;
@@ -25,18 +35,17 @@ module tb_fma_cosim (
   logic [2:0]  directed_rm  [MAX_DIRECTED];
   logic [3:0]  directed_op  [MAX_DIRECTED];
 
-  // ---- DUT 接口 ----
+  // ---- DUT interface (aligned with fma_hector_wrap.sv) ----
+  logic        dut_go;
+  logic [31:0] dut_multiplier;
+  logic [31:0] dut_multiplicand;
+  logic [31:0] dut_addend;
+  logic [2:0]  dut_rounding_mode;
   logic        dut_valid;
-  logic        dut_ready;
-  logic [31:0] dut_a, dut_b, dut_c;
-  logic [2:0]  dut_rm;
-  logic [3:0]  dut_op;
-  logic        dut_out_valid;
-  logic        dut_out_ready;
   logic [31:0] dut_result;
-  logic [4:0]  dut_fflags;
+  logic [4:0]  dut_exceptions;       // {NV, DZ, OF, UF, NX} (Hector: exceptions)
 
-  // ---- 测试状态机 ----
+  // ---- Test FSM ----
   typedef enum logic [1:0] {
     ST_RESET,
     ST_SETUP,
@@ -45,7 +54,7 @@ module tb_fma_cosim (
   } state_t;
   state_t state;
 
-  // ---- 参数读取 + 启动 Banner ----
+  // ---- Parameter read + startup banner ----
   initial begin
     if (!$value$plusargs("SEED=%d", seed))   seed = 1;
     if (!$value$plusargs("NUM=%d", num_tests)) num_tests = 10;
@@ -56,6 +65,7 @@ module tb_fma_cosim (
 
     $display("============================================================");
     $display(" cvfpu FMA + SoftFloat Co-Simulation Testbench");
+    $display(" (interface aligned with Hector DPV platform)");
     $display(" SEED=%0d, NUM=%0d", seed, num_tests);
     $display("============================================================");
   end
@@ -96,63 +106,65 @@ module tb_fma_cosim (
   // Combinational: Generate test vectors and call DPI golden model
   // ==========================================================================
 
-  // Combinational outputs of this block
-  logic [31:0] comb_a, comb_b, comb_c;
-  logic [2:0]  comb_rm;
+  // Combinational outputs
+  logic [31:0] comb_multiplier, comb_multiplicand, comb_addend;
+  logic [2:0]  comb_rounding_mode;
   logic [3:0]  comb_op;
-  int          comb_ref_res, comb_ref_flg;
+  int          comb_ref_res, comb_ref_exc;
   string       comb_name;
 
-  int ref_a, ref_b, ref_c, ref_rm;
-  int ref_result, ref_fflags;
+  int ref_multiplier, ref_multiplicand, ref_addend, ref_rm;
+  int ref_result, ref_exceptions;
 
   always @* begin
     // Defaults
-    comb_a   = '0;
-    comb_b   = '0;
-    comb_c   = '0;
-    comb_rm  = '0;
-    comb_op  = FMADD;
-    comb_name = "";
-    ref_a = 0; ref_b = 0; ref_c = 0; ref_rm = 0;
-    ref_result = 0; ref_fflags = 0;
-    comb_ref_res = 0; comb_ref_flg = 0;
+    comb_multiplier   = '0;
+    comb_multiplicand = '0;
+    comb_addend       = '0;
+    comb_rounding_mode = '0;
+    comb_op           = OP_FMADD;
+    comb_name         = "";
+    ref_multiplier = 0; ref_multiplicand = 0; ref_addend = 0; ref_rm = 0;
+    ref_result = 0; ref_exceptions = 0;
+    comb_ref_res = 0; comb_ref_exc = 0;
 
     if (state == ST_SETUP) begin
       if (case_idx < num_directed) begin
         // ---- Directed cases (loaded from tests/directed_cases.hex) ----
-        comb_a   = directed_a[case_idx];
-        comb_b   = directed_b[case_idx];
-        comb_c   = directed_c[case_idx];
-        comb_rm  = directed_rm[case_idx];
-        comb_op  = directed_op[case_idx];
-        comb_name = $sformatf("directed_%0d", case_idx);
+        comb_multiplier   = directed_a[case_idx];
+        comb_multiplicand = directed_b[case_idx];
+        comb_addend       = directed_c[case_idx];
+        comb_rounding_mode = directed_rm[case_idx];
+        comb_op           = directed_op[case_idx];
+        comb_name         = $sformatf("directed_%0d", case_idx);
       end else begin
         // ---- Random cases ----
         // Constrain exponent to ~0x7F to stay in normal range [1.0, 2.0),
         // avoid inf/NaN/overflow edge cases in random testing.
         // Sign bit is randomized for broader coverage.
         // Use seed+case_idx as RNG seed — SEED controls the random sequence.
-        comb_a   = ($urandom(seed ^ ((case_idx - num_directed) * 4 + 0)) & 32'h3FFFFFFF) | 32'h3F800000;
-        // Randomly flip sign bit for ~50% negative values
-        if ($urandom(seed ^ ((case_idx - num_directed) * 4 + 1000)) & 1) comb_a[31] = 1'b1;
-        comb_b   = ($urandom(seed ^ ((case_idx - num_directed) * 4 + 1)) & 32'h3FFFFFFF) | 32'h3F800000;
-        if ($urandom(seed ^ ((case_idx - num_directed) * 4 + 1001)) & 1) comb_b[31] = 1'b1;
-        comb_c   = ($urandom(seed ^ ((case_idx - num_directed) * 4 + 2)) & 32'h3FFFFFFF) | 32'h3F800000;
-        if ($urandom(seed ^ ((case_idx - num_directed) * 4 + 1002)) & 1) comb_c[31] = 1'b1;
-        comb_rm  = $urandom(seed ^ ((case_idx - num_directed) * 4 + 3)) % 5;  // 0..4
-        comb_op  = FMADD;
-        comb_name = $sformatf("random_%0d", case_idx - num_directed);
+        comb_multiplier   = ($urandom(seed ^ ((case_idx - num_directed) * 4 + 0)) & 32'h3FFFFFFF) | 32'h3F800000;
+        if ($urandom(seed ^ ((case_idx - num_directed) * 4 + 1000)) & 1) comb_multiplier[31] = 1'b1;
+        comb_multiplicand = ($urandom(seed ^ ((case_idx - num_directed) * 4 + 1)) & 32'h3FFFFFFF) | 32'h3F800000;
+        if ($urandom(seed ^ ((case_idx - num_directed) * 4 + 1001)) & 1) comb_multiplicand[31] = 1'b1;
+        comb_addend       = ($urandom(seed ^ ((case_idx - num_directed) * 4 + 2)) & 32'h3FFFFFFF) | 32'h3F800000;
+        if ($urandom(seed ^ ((case_idx - num_directed) * 4 + 1002)) & 1) comb_addend[31] = 1'b1;
+        comb_rounding_mode = $urandom(seed ^ ((case_idx - num_directed) * 4 + 3)) % 5;  // 0..4
+        comb_op           = OP_FMADD;
+        comb_name         = $sformatf("random_%0d", case_idx - num_directed);
       end
 
-      // Call DPI golden model
-      ref_a = int'(comb_a);
-      ref_b = int'(comb_b);
-      ref_c = int'(comb_c);
-      ref_rm = int'(comb_rm);
-      dpi_fmadd_s(1, ref_a, ref_b, ref_c, ref_rm, ref_result, ref_fflags);
+      // Call DPI golden model (port names aligned with Hector fma_spec.cpp)
+      ref_multiplier   = int'(comb_multiplier);
+      ref_multiplicand = int'(comb_multiplicand);
+      ref_addend       = int'(comb_addend);
+      ref_rm           = int'(comb_rounding_mode);
+      dpi_fma_golden(1,
+          ref_multiplier, ref_multiplicand, ref_addend,
+          ref_rm, int'(comb_op),
+          ref_result, ref_exceptions);
       comb_ref_res = ref_result;
-      comb_ref_flg = ref_fflags;
+      comb_ref_exc = ref_exceptions;
     end
   end
 
@@ -161,85 +173,79 @@ module tb_fma_cosim (
   // ==========================================================================
 
   // Registered copies of combinational values (captured in ST_SETUP)
-  logic [31:0] reg_a, reg_b, reg_c;
-  logic [2:0]  reg_rm;
+  logic [31:0] reg_multiplier, reg_multiplicand, reg_addend;
+  logic [2:0]  reg_rounding_mode;
   logic [3:0]  reg_op;
-  int          reg_ref_res, reg_ref_flg;
+  int          reg_ref_res, reg_ref_exc;
   string       reg_name;
 
   always_ff @(posedge clk) begin
     if (!rst_n) begin
-      state      <= ST_RESET;
-      case_idx   <= 0;
-      pass_cnt   <= 0;
-      fail_cnt   <= 0;
-      dut_valid  <= 1'b0;
-      dut_out_ready <= 1'b1;
-      reg_a   <= '0;
-      reg_b   <= '0;
-      reg_c   <= '0;
-      reg_rm  <= '0;
-      reg_op  <= FMADD;
-      reg_ref_res <= 0;
-      reg_ref_flg <= 0;
-      reg_name <= "";
+      state             <= ST_RESET;
+      case_idx          <= 0;
+      pass_cnt          <= 0;
+      fail_cnt          <= 0;
+      dut_go            <= 1'b0;
+      reg_multiplier    <= '0;
+      reg_multiplicand  <= '0;
+      reg_addend        <= '0;
+      reg_rounding_mode <= '0;
+      reg_op            <= OP_FMADD;
+      reg_ref_res       <= 0;
+      reg_ref_exc       <= 0;
+      reg_name          <= "";
     end else begin
       unique case (state)
         ST_RESET: begin
-          state      <= ST_SETUP;
-          case_idx   <= 0;
+          state       <= ST_SETUP;
+          case_idx    <= 0;
           total_cases <= num_directed + num_tests;
         end
 
         ST_SETUP: begin
-          // Capture combinational values into registers
-          reg_a       <= comb_a;
-          reg_b       <= comb_b;
-          reg_c       <= comb_c;
-          reg_rm      <= comb_rm;
-          reg_op      <= comb_op;
-          reg_ref_res <= comb_ref_res;
-          reg_ref_flg <= comb_ref_flg;
-          reg_name    <= comb_name;
+          // Latch combinational golden results
+          reg_multiplier    <= comb_multiplier;
+          reg_multiplicand  <= comb_multiplicand;
+          reg_addend        <= comb_addend;
+          reg_rounding_mode <= comb_rounding_mode;
+          reg_op            <= comb_op;
+          reg_ref_res       <= comb_ref_res;
+          reg_ref_exc       <= comb_ref_exc;
+          reg_name          <= comb_name;
 
-          // Send to DUT only when ready (proper handshake)
-          if (dut_ready) begin
-            dut_valid <= 1'b1;
-            dut_a  <= comb_a;
-            dut_b  <= comb_b;
-            dut_c  <= comb_c;
-            dut_rm <= comb_rm;
-            dut_op <= comb_op;
-            state   <= ST_CHECK;
-          end else begin
-            dut_valid <= 1'b0;
-            // Stay in ST_SETUP, retry next cycle
-          end
+          // Send go pulse with data (go/valid protocol, aligned with Hector)
+          // For NUM_PIPE_REGS=0: go in cycle N, valid+result in cycle N+1
+          dut_go            <= 1'b1;
+          dut_multiplier    <= comb_multiplier;
+          dut_multiplicand  <= comb_multiplicand;
+          dut_addend        <= comb_addend;
+          dut_rounding_mode <= comb_rounding_mode;
+          state <= ST_CHECK;
         end
 
         ST_CHECK: begin
-          dut_valid <= 1'b0;
+          dut_go <= 1'b0;  // deassert go immediately after the pulse
 
-          if (dut_out_valid) begin
-            if ((dut_result == reg_ref_res) && (dut_fflags == reg_ref_flg)) begin
+          if (dut_valid) begin
+            if ((dut_result == reg_ref_res) && (dut_exceptions == reg_ref_exc)) begin
               pass_cnt <= pass_cnt + 1;
               if (trace_en)
-                $display("[PASS] %s -> RES=%08h FLG=%05b", reg_name, dut_result, dut_fflags);
+                $display("[PASS] %s -> RES=%08h EXC=%05b", reg_name, dut_result, dut_exceptions);
             // RISC-V uses canonical NaN (0x7fc00000) while IEEE 754 / SoftFloat may
             // preserve NaN payload. When NV is set and all other flags match, both sides
             // agree the result is NaN — accept payload difference as a pass.
-            end else if (dut_fflags[4] && (dut_fflags == reg_ref_flg)) begin
+            end else if (dut_exceptions[4] && (dut_exceptions == reg_ref_exc)) begin
               pass_cnt <= pass_cnt + 1;
               if (trace_en)
-                $display("[PASS] %s -> RES=%08h FLG=%05b (NaN payload diff OK)",
-                         reg_name, dut_result, dut_fflags);
+                $display("[PASS] %s -> RES=%08h EXC=%05b (NaN payload diff OK)",
+                         reg_name, dut_result, dut_exceptions);
             end else begin
               fail_cnt <= fail_cnt + 1;
               $display("[FAIL] %s", reg_name);
-              $display("  Input:  A=%08h B=%08h C=%08h RM=%0d OP=%0d",
-                       reg_a, reg_b, reg_c, reg_rm, reg_op);
-              $display("  RTL:    RES=%08h FLG=%05b", dut_result, dut_fflags);
-              $display("  Ref:    RES=%08h FLG=%05b", reg_ref_res, reg_ref_flg);
+              $display("  Input:  multiplier=%08h multiplicand=%08h addend=%08h RM=%0d OP=%0d",
+                       reg_multiplier, reg_multiplicand, reg_addend, reg_rounding_mode, reg_op);
+              $display("  RTL:    RES=%08h EXC=%05b", dut_result, dut_exceptions);
+              $display("  Ref:    RES=%08h EXC=%05b", reg_ref_res, reg_ref_exc);
             end
 
             if (case_idx + 1 < total_cases) begin
@@ -267,23 +273,20 @@ module tb_fma_cosim (
     end
   end
 
-  // ---- DUT 实例 ----
-  fma_dut_wrapper #(
-    .NumPipeRegs (0)
+  // ---- DUT instance: fma_hector_wrap (shared with Hector DPV flow) ----
+  fma_hector_wrap #(
+    .NUM_PIPE_REGS (0)
   ) i_dut (
-    .clk_i       (clk),
-    .rst_ni      (rst_n),
-    .in_valid_i  (dut_valid),
-    .in_ready_o  (dut_ready),
-    .a_i         (dut_a),
-    .b_i         (dut_b),
-    .c_i         (dut_c),
-    .rnd_mode_i  (dut_rm),
-    .op_i        (dut_op),
-    .out_valid_o (dut_out_valid),
-    .out_ready_i (dut_out_ready),
-    .result_o    (dut_result),
-    .fflags_o    (dut_fflags)
+    .clock         (clk),
+    .resetN        (rst_n),
+    .go            (dut_go),
+    .multiplier    (dut_multiplier),
+    .multiplicand  (dut_multiplicand),
+    .addend        (dut_addend),
+    .rounding_mode (dut_rounding_mode),
+    .valid         (dut_valid),
+    .result        (dut_result),
+    .exceptions    (dut_exceptions)
   );
 
 endmodule
