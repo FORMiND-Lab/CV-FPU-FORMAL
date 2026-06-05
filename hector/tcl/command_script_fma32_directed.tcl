@@ -71,6 +71,8 @@ proc ual {} {
     assume impl.go(1) == 1
     map_by_name -inputs -specphase 1 -implphase 1
     assume spec.rounding_mode(1) < 5
+    assume impl.op_i(1) == 0       ;# FMADD only
+    assume impl.op_mod_i(1) == 0
 
     # ---- Sanity Cases ----
     # 3F800000 40000000 40400000 0 0   # 1.0 * 2.0 + 3.0 = 5.0

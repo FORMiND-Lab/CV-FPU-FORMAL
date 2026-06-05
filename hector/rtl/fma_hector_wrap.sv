@@ -4,17 +4,23 @@
 // Wraps the cvfpu fpnew_fma module into the Hector DPV interface convention:
 //   - go/valid handshake (single pulse) instead of valid/ready streaming
 //   - Standardized port names matching the spec model (fma_spec.cpp)
-//   - Fixed FP32 format, FMADD operation
+//   - Fixed FP32 format
+//   - op_i / op_mod_i ports use fpnew_pkg encoding, passed through to fpnew_fma:
+//       FMADD + op_mod=0 → FMADD,  FMADD + op_mod=1 → FMSUB
+//       FNMSUB + op_mod=0 → FNMSUB, FNMSUB + op_mod=1 → FNMADD
+//       ADD + op_mod=0 → ADD,  ADD + op_mod=1 → SUB
+//       MUL + op_mod=0 → MUL,  ADDS + op_mod=0 → ADDS
 //
 // The Hector interface convention (from DPV_Advanced examples):
 //   Inputs:  go, [operands], rounding_mode, clock, resetN
 //   Outputs: result, exceptions, valid
 //
-// Differences from fma_dut_wrapper.sv (cosim):
+// Differences from the old fma_dut_wrapper.sv (cosim, deleted):
 //   - go pulse instead of in_valid/in_ready handshake
 //   - Single valid output instead of out_valid/out_ready handshake
 //   - Port names match Hector spec model for map_by_name
 //   - resetN (active-low) naming convention for -negReset flag
+//   - op_i / op_mod_i ports use fpnew_pkg encoding, direct passthrough to fpnew_fma
 //============================================================================
 
 `include "common_cells/registers.svh"
@@ -38,6 +44,8 @@ module fma_hector_wrap
   input  logic [31:0] multiplicand,   // = operand B
   input  logic [31:0] addend,         // = operand C
   input  logic [2:0]  rounding_mode,  // RISC-V: 0=RNE, 1=RTZ, 2=RDN, 3=RUP, 4=RMM
+  input  logic [3:0]  op_i,           // fpnew_pkg::operation_e: FMADD,FNMSUB,ADD,MUL,ADDS
+  input  logic        op_mod_i,       // 0/1 selects variant (see fpnew_fma encoding table)
 
   // ---- Clock and reset ----
   input  logic        clock,
@@ -54,6 +62,7 @@ module fma_hector_wrap
   logic [2:0][31:0]     fma_operands;
   fpnew_pkg::roundmode_e fma_rm;
   fpnew_pkg::operation_e fma_op;
+  logic                 fma_op_mod;
   logic                 fma_out_valid;
   logic                 fma_out_ready;
   logic [31:0]          fma_result;
@@ -62,11 +71,15 @@ module fma_hector_wrap
   // Pipeline tracking for latency
   logic                 go_d;         // go delayed by 1 cycle (for latency > 0)
 
-  //==========================================================================
-  // Input mapping
-  //==========================================================================
+  // ---- Input mapping ----
+  // op_i and op_mod_i are passed directly through to fpnew_fma.
+  // The fpnew_fma module internally handles all sign manipulation,
+  // ADD (forces A=1.0), MUL (forces C=0), and ADDS variants.
+  // Encoding matches fpnew_pkg::operation_e:
+  //   FMADD=0, FNMSUB=1, ADD=2, MUL=3, ADDS=4
+  //   op_mod_i: 0 or 1 selects variant (see fpnew_fma comments)
 
-  // Pack operands as fpnew_fma expects
+  // Pack operands
   assign fma_operands[0] = multiplier;
   assign fma_operands[1] = multiplicand;
   assign fma_operands[2] = addend;
@@ -74,8 +87,9 @@ module fma_hector_wrap
   // Rounding mode: direct cast (0-4 map identically)
   assign fma_rm = fpnew_pkg::roundmode_e'(rounding_mode);
 
-  // Operation: hardcoded to FMADD (first phase — extend later)
-  assign fma_op = fpnew_pkg::FMADD;
+  // Operation: pass through directly to fpnew_fma
+  assign fma_op     = fpnew_pkg::operation_e'(op_i);
+  assign fma_op_mod = op_mod_i;
 
   // go → in_valid (Hector single-pulse to streaming handshake)
   // For NUM_PIPE_REGS=0 (combinational), in_ready is always 1.
@@ -99,7 +113,7 @@ module fma_hector_wrap
     .is_boxed_i         (3'b111),       // All boxed (RISC-V)
     .rnd_mode_i         (fma_rm),
     .op_i               (fma_op),
-    .op_mod_i           (1'b0),
+    .op_mod_i           (fma_op_mod),
     .tag_i              (1'b0),
     .mask_i             (1'b1),         // No SIMD masking
     .aux_i              (1'b0),

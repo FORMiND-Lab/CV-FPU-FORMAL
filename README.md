@@ -104,11 +104,12 @@ make cex CEX_FILE=tests/my_cex.hex
 CEX 输入文件格式 (与 `tests/directed_cases.hex` 相同)：
 
 ```
-# <A_hex> <B_hex> <C_hex> <RM> <OP>
-# RM: 0=RNE, 1=RTZ, 2=RDN, 3=RUP, 4=RMM
-# OP: 0=FMADD, 1=FMSUB, 2=FNMADD, 3=FNMSUB
+# <A_hex> <B_hex> <C_hex> <RM> <OP_I> <OP_MOD>
+# RM:     0=RNE, 1=RTZ, 2=RDN, 3=RUP, 4=RMM
+# OP_I:   fpnew_pkg: FMADD=0, FNMSUB=1, ADD=2, MUL=3, ADDS=4
+# OP_MOD: 0/1 selects variant (FMSUB, FNMADD, SUB, ...)
 
-01010298 408008e6 81e21720 4 0
+01010298 408008e6 81e21720 4 0 0
 ```
 
 ### Hector 形式化验证
@@ -143,6 +144,7 @@ Cosim 仿真与 Hector 形式化验证**共享同一套接口命名和 DUT wrapp
 | rounding | `rounding_mode` | `rounding_mode` | `rounding_mode` |
 | result | `result` | `result` | `result` |
 | flags | `exceptions` | `exceptions` | `exceptions` |
+| op_i / op_mod | fpnew_pkg encoding | — | fpnew_pkg encoding (直通) |
 | handshake | go/valid | — | go/valid |
 | DUT wrapper | `fma_hector_wrap.sv` | — | `fma_hector_wrap.sv` |
 

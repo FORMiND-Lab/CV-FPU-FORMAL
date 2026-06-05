@@ -73,6 +73,8 @@ proc ual_main {} {
     assume impl.go(1) == 1
     map_by_name -inputs -specphase 1 -implphase 1
     assume spec.rounding_mode(1) < 5
+    assume impl.op_i(1) == 0       ;# FMADD only
+    assume impl.op_mod_i(1) == 0
 
     lemma result_eq  = spec.result(1)     == impl.result(1)
     lemma except_eq  = spec.exceptions(1) == impl.exceptions(1)

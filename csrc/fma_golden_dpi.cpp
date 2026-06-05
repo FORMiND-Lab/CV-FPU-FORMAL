@@ -1,11 +1,22 @@
 //============================================================================
-// fma_golden_dpi.cpp — FP32 FMA DPI-C Golden Model Implementation
+// fma_golden_dpi.cpp — FP32 ADDMUL DPI-C Golden Model Implementation
 //
 // Port names aligned with hector/spec/fma_spec.cpp:
 //   multiplier, multiplicand, addend, rounding_mode, result, exceptions
 //
-// Uses Berkeley SoftFloat f32_mulAdd as the golden reference.
-// Supports all 4 FMA operation variants via the `op` parameter.
+// op_i / op_mod_i encoding matches fpnew_pkg / fpnew_fma RTL:
+//   ┌────────┬──────────┬─────────────┬──────────────────────────┐
+//   │ op_i   │ op_mod_i │ Operation   │ Implementation           │
+//   ├────────┼──────────┼─────────────┼──────────────────────────┤
+//   │ FMADD  │ 0        │ FMADD       │ f32_mulAdd(a, b, c)      │
+//   │ FMADD  │ 1        │ FMSUB       │ f32_mulAdd(a, b, neg(c)) │
+//   │ FNMSUB │ 0        │ FNMSUB      │ f32_mulAdd(neg(a),b,c)   │
+//   │ FNMSUB │ 1        │ FNMADD      │ f32_mulAdd(neg(a),b,neg(c))│
+//   │ ADD    │ 0        │ ADD         │ f32_mulAdd(1.0, b, c)    │
+//   │ ADD    │ 1        │ SUB         │ f32_mulAdd(1.0, b, neg(c))│
+//   │ MUL    │ x        │ MUL         │ f32_mulAdd(a, b, 0)      │
+//   │ ADDS   │ x        │ ADDS        │ f32_mulAdd(1.0, b, c)    │
+//   └────────┴──────────┴─────────────┴──────────────────────────┘
 //============================================================================
 
 extern "C" {
@@ -13,25 +24,22 @@ extern "C" {
 }
 #include "fma_golden_dpi.h"
 
-#include <cstdio>
-#include <cstring>
-
 //============================================================================
 // Helpers
 //============================================================================
 
-// Flip sign bit of float32_t
 static inline float32_t f32_negate(float32_t f) {
     f.v ^= 0x80000000u;
     return f;
 }
 
-// Convert SoftFloat exception flags to RTL format
-// RTL status_t = {NV, DZ, OF, UF, NX} (5 bits)
-// SoftFloat:  inexact=1, underflow=2, overflow=4, infinite=8, invalid=16
-// NOTE: softfloat_flag_infinite is intentionally NOT mapped — FMA never sets
-// DZ (divide-by-zero). Infinite results from FMA are caused by overflow (OF+NX)
-// or invalid operations (NV), both already handled.
+static inline float32_t f32_abs(float32_t f) {
+    f.v &= ~0x80000000u;  // force sign = 0 (positive)
+    return f;
+}
+
+// Convert SoftFloat exception flags to RTL format {NV, DZ, OF, UF, NX}
+// NOTE: softfloat_flag_infinite is intentionally NOT mapped — FMA never sets DZ.
 static unsigned int softfloat_to_rtl_exceptions(unsigned char sf_flags) {
     unsigned int out = 0;
     if (sf_flags & softfloat_flag_invalid)   out |= (1 << 4);  // NV
@@ -41,30 +49,20 @@ static unsigned int softfloat_to_rtl_exceptions(unsigned char sf_flags) {
     return out;
 }
 
-// Convert RTL rounding mode to SoftFloat rounding mode
-// RISC-V: RNE=000, RTZ=001, RDN=010, RUP=011, RMM=100
+// RISC-V → SoftFloat rounding mode (1:1)
 static unsigned char rtl_to_sf_rm(unsigned int rm) {
     switch (rm) {
-        case 0: return softfloat_round_near_even;     // RNE
-        case 1: return softfloat_round_minMag;        // RTZ
-        case 2: return softfloat_round_min;           // RDN
-        case 3: return softfloat_round_max;           // RUP
-        case 4: return softfloat_round_near_maxMag;   // RMM
-        default: return softfloat_round_near_even;    // default RNE
+        case 0: return softfloat_round_near_even;
+        case 1: return softfloat_round_minMag;
+        case 2: return softfloat_round_min;
+        case 3: return softfloat_round_max;
+        case 4: return softfloat_round_near_maxMag;
+        default: return softfloat_round_near_even;
     }
 }
 
 //============================================================================
-// DPI-C: dpi_fma_golden — unified FMA golden model
-//
-// Port names match hector/spec/fma_spec.cpp:
-//   multiplier, multiplicand, addend, rounding_mode, result, exceptions
-//
-// op selects the FMA variant:
-//   0 = FMADD  : result = a * b + c
-//   1 = FMSUB  : result = a * b - c
-//   2 = FNMADD : result = -(a * b) + c
-//   3 = FNMSUB : result = -(a * b) - c
+// dpi_fma_golden — ADDMUL golden model (fpnew_pkg encoding)
 //============================================================================
 void dpi_fma_golden(
     int             enable,
@@ -72,7 +70,8 @@ void dpi_fma_golden(
     unsigned int    multiplicand,
     unsigned int    addend,
     unsigned int    rounding_mode,
-    unsigned int    op,
+    unsigned int    op_i,
+    unsigned int    op_mod_i,
     unsigned int*   result,
     unsigned int*   exceptions
 ) {
@@ -82,7 +81,6 @@ void dpi_fma_golden(
         return;
     }
 
-    // Clear SoftFloat exception flags and set rounding mode
     softfloat_exceptionFlags = 0;
     softfloat_roundingMode   = rtl_to_sf_rm(rounding_mode);
 
@@ -91,20 +89,52 @@ void dpi_fma_golden(
     float32_t fc = {.v = addend};
     float32_t fres;
 
-    switch (op) {
-        case 0: // FMADD:  a * b + c
-            fres = f32_mulAdd(fa, fb, fc);
+    switch (op_i) {
+        // ---- FMADD, FMSUB ----
+        case OP_FMADD:
+            if (op_mod_i == 0)
+                fres = f32_mulAdd(fa, fb, fc);            // FMADD:  a*b + c
+            else
+                fres = f32_mulAdd(fa, fb, f32_negate(fc)); // FMSUB:  a*b - c
             break;
-        case 1: // FMSUB:  a * b - c
-            fres = f32_mulAdd(fa, fb, f32_negate(fc));
+
+        // ---- FNMSUB, FNMADD ----
+        case OP_FNMSUB:
+            if (op_mod_i == 0)
+                fres = f32_mulAdd(f32_negate(fa), fb, fc);      // FNMSUB: -(a*b)+c
+            else
+                fres = f32_mulAdd(f32_negate(fa), fb, f32_negate(fc)); // FNMADD: -(a*b)-c
             break;
-        case 2: // FNMADD: -(a * b) + c
-            fres = f32_mulAdd(f32_negate(fa), fb, fc);
+
+        // ---- ADD, SUB ----
+        case OP_ADD:
+            fa.v = 0x3F800000;  // +1.0
+            if (op_mod_i == 0)
+                fres = f32_mulAdd(fa, fb, fc);            // ADD:  1.0*b + c = b + c
+            else
+                fres = f32_mulAdd(fa, fb, f32_negate(fc)); // SUB:  1.0*b - c = b - c
             break;
-        case 3: // FNMSUB: -(a * b) - c
-            fres = f32_mulAdd(f32_negate(fa), fb, f32_negate(fc));
+
+        // ---- MUL ----
+        case OP_MUL: {
+            // RTL sets C = ±0 (sign matches op_mod_i if non-zero)
+            // Use +0.0 for op_mod=0, -0.0 for op_mod=1 (matches fpnew_fma behavior)
+            float32_t zero = {.v = op_mod_i ? 0x80000000u : 0x00000000u};
+            fres = f32_mulAdd(fa, fb, zero);              // MUL:  a*b + 0
             break;
-        default: // fallback to FMADD
+        }
+
+        // ---- ADDS (same as ADD) ----
+        case OP_ADDS:
+            fa.v = 0x3F800000;  // +1.0
+            if (op_mod_i == 0)
+                fres = f32_mulAdd(fa, fb, fc);
+            else
+                fres = f32_mulAdd(fa, fb, f32_negate(fc));
+            break;
+
+        // ---- Unknown → fallback to FMADD ----
+        default:
             fres = f32_mulAdd(fa, fb, fc);
             break;
     }

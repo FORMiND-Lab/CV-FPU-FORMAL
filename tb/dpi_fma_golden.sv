@@ -3,19 +3,29 @@
 //
 // Port names aligned with hector/spec/fma_spec.cpp:
 //   multiplier, multiplicand, addend, rounding_mode, result, exceptions
+//
+// op_i / op_mod_i encoding matches fpnew_pkg / fpnew_fma:
+//   FMADD=0, FNMSUB=1, ADD=2, MUL=3, ADDS=4
+//   op_mod_i: 0/1 selects variant (FMSUB, FNMADD, SUB, ...)
 //============================================================================
 
 package dpi_fma_golden_pkg;
 
-  // ---- DPI-C import: unified FMA golden model ----
-  // op: 0=FMADD, 1=FMSUB, 2=FNMADD, 3=FNMSUB
+  // fpnew_pkg::operation_e encoding
+  localparam int OP_FMADD  = 0;
+  localparam int OP_FNMSUB = 1;
+  localparam int OP_ADD    = 2;
+  localparam int OP_MUL    = 3;
+  localparam int OP_ADDS   = 4;
+
   import "DPI-C" function void dpi_fma_golden(
     input  int enable,
     input  int multiplier,
     input  int multiplicand,
     input  int addend,
     input  int rounding_mode,
-    input  int op,
+    input  int op_i,
+    input  int op_mod_i,
     output int result,
     output int exceptions
   );
