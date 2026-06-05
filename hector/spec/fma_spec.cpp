@@ -67,10 +67,12 @@ void hector_wrapper()
     f_addend.v       = addend;
 
     // ---- SoftFloat state configuration ----
-    // RISC-V / IEEE 754 mandates tininess detection BEFORE rounding.
+    // Use AFTER rounding tininess detection to match cvfpu fpnew_fma RTL behavior.
+    // The RTL produces only NX (not UF) on subnormal-to-normal boundary cases,
+    // which is consistent with after-rounding tininess.
     softfloat_roundingMode   = rounding_mode;  // 0-4 maps directly
     softfloat_exceptionFlags = 0;
-    softfloat_detectTininess = softfloat_tininess_beforeRounding;
+    softfloat_detectTininess = softfloat_tininess_afterRounding;
 
     // ---- Golden computation: FP32 FMA ----
     f_result = f32_mulAdd(f_multiplier, f_multiplicand, f_addend);

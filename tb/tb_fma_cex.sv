@@ -167,6 +167,17 @@ module tb_fma_cex (
           dut_rounding_mode <= tc_rm[case_idx];
           dut_op_i          <= tc_op_i[case_idx];
           dut_op_mod        <= tc_op_mod[case_idx];
+
+          // Latch golden results while combinational DPI is still active
+          cap_ref_result     <= ref_result;
+          cap_ref_exceptions <= ref_exceptions;
+          cap_multiplier     <= tc_multiplier[case_idx];
+          cap_multiplicand   <= tc_multiplicand[case_idx];
+          cap_addend         <= tc_addend[case_idx];
+          cap_rm             <= tc_rm[case_idx];
+          cap_op_i           <= tc_op_i[case_idx];
+          cap_op_mod         <= tc_op_mod[case_idx];
+
           state <= ST_WAIT;
         end
 
@@ -175,14 +186,6 @@ module tb_fma_cex (
           if (dut_valid) begin
             cap_rtl_result     <= dut_result;
             cap_rtl_exceptions <= dut_exceptions;
-            cap_ref_result     <= ref_result;
-            cap_ref_exceptions <= ref_exceptions;
-            cap_multiplier     <= tc_multiplier[case_idx];
-            cap_multiplicand   <= tc_multiplicand[case_idx];
-            cap_addend         <= tc_addend[case_idx];
-            cap_rm             <= tc_rm[case_idx];
-            cap_op_i           <= tc_op_i[case_idx];
-            cap_op_mod         <= tc_op_mod[case_idx];
             state <= ST_REPORT;
           end
         end
