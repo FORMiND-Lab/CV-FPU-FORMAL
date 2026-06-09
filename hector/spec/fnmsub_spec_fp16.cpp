@@ -2,7 +2,7 @@
 // fma_spec.cpp — Hector Specification Model for FP32 FMA
 //
 // This is the C++ "golden model" that Hector uses as the specification side
-// of the equivalence check. It wraps Berkeley SoftFloat's f32_mulAdd with
+// of the equivalence check. It wraps Berkeley SoftFloat's f16_mulAdd with
 // the Hector API (Hector::registerInput, Hector::registerOutput, etc.).
 //
 // References:
@@ -40,31 +40,31 @@ void hector_wrapper()
     // ---- I/O variables ----
     uint8_t  rounding_mode;      // 0..4 (RISC-V encoding), 5-7 undefined
     uint8_t  exceptions;         // {NV, DZ, OF, UF, NX} (5 bits)
-    uint32_t multiplier;         // FP32 operand A
-    uint32_t multiplicand;       // FP32 operand B
-    uint32_t addend;             // FP32 operand C
-    uint32_t result;             // FP32 result
+    uint16_t multiplier;         // FP32 operand A
+    uint16_t multiplicand;       // FP32 operand B
+    uint16_t addend;             // FP32 operand C
+    uint16_t result;             // FP32 result
 
-    float32_t f_multiplier;
-    float32_t f_multiplicand;
-    float32_t f_addend;
-    float32_t f_result;
+    float16_t f_multiplier;
+    float16_t f_multiplicand;
+    float16_t f_addend;
+    float16_t f_result;
 
     // ---- Hector I/O registration ----
     // Names MUST match the port names in fma_hector_wrap.sv for map_by_name.
-    Hector::registerInput("multiplier",     &multiplier,     8 * sizeof(multiplier));
-    Hector::registerInput("multiplicand",   &multiplicand,   8 * sizeof(multiplicand));
-    Hector::registerInput("addend",         &addend,         8 * sizeof(addend));
+    Hector::registerInput("multiplier",     &multiplier,     16);
+    Hector::registerInput("multiplicand",   &multiplicand,   16);
+    Hector::registerInput("addend",         &addend,         16);
     Hector::registerInput("rounding_mode",  &rounding_mode,  8 * sizeof(rounding_mode));
-    Hector::registerOutput("result",        &result,         8 * sizeof(result));
+    Hector::registerOutput("result",        &result,         16);
     Hector::registerOutput("exceptions",    &exceptions,     8 * sizeof(exceptions));
 
     Hector::beginCapture();
 
-    // ---- Input mapping: uint32_t → SoftFloat float32_t ----
-    f_multiplier.v   = multiplier;
+    // ---- Input mapping: uint32_t → SoftFloat float16_t ----
+    f_multiplier.v   = multiplier ^ 0x8000;  // FNMSUB: invert sign of A
     f_multiplicand.v = multiplicand;
-    f_addend.v = addend ^ 0x8000;  // 翻转符号位
+    f_addend.v       = addend;
 
     // ---- SoftFloat state configuration ----
     // Use AFTER rounding tininess detection to match cvfpu fpnew_fma RTL behavior.
@@ -75,7 +75,7 @@ void hector_wrapper()
     softfloat_detectTininess = softfloat_tininess_afterRounding;
 
     // ---- Golden computation: FP32 FMA ----
-    f_result = f32_mulAdd(f_multiplier, f_multiplicand, f_addend);
+    f_result = f16_mulAdd(f_multiplier, f_multiplicand, f_addend);
 
     // ---- Output mapping ----
     result     = f_result.v;
