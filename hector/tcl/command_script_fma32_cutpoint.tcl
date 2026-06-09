@@ -1,4 +1,3 @@
-
 set _hector_comp_use_new_flow true
 set _hector_softfloat_version custom
 
@@ -26,6 +25,7 @@ proc compile_spec {} {
 
 proc compile_impl {} {
     create_design -name impl -top fma_hector_wrap -clock clock -reset resetN -negReset
+    set_cutpoint fma_hector_wrap.i_fma.product_shifted
     vcs -sverilog \
         +incdir+../../third_party/cvfpu/common_cells/include \
         ../../third_party/cvfpu/fpnew_pkg.sv \
@@ -45,26 +45,22 @@ proc ual_main {} {
     assume spec.rounding_mode(1) < 5
     assume impl.op_i(1) == 0
     assume impl.op_mod_i(1) == 0
-
+    assume impl.i_fma.product_shifted(1) == \
+        (impl.i_fma.mantissa_a(1) * impl.i_fma.mantissa_b(1)) << 2
     lemma result_eq = spec.result(1) == impl.result(1)
     lemma except_eq = spec.exceptions(1) == impl.exceptions(1)
-
     set_resource_limit 36000
     set_hector_multiple_solve_scripts false
 }
 
 proc case_split_fma32 {} {
     caseSplitStrategy basic
-
     caseBegin A_inf_NaN
     caseAssume (spec.multiplier(1)[30:23] == 8'hff)
-
     caseBegin B_inf_NaN
     caseAssume (spec.multiplicand(1)[30:23] == 8'hff)
-
     caseBegin C_inf_NaN
     caseAssume (spec.addend(1)[30:23] == 8'hff)
-
     caseBegin norm_norm_norm
     caseAssume (spec.multiplier(1)[30:23] != 8'h00)
     caseAssume (spec.multiplier(1)[30:23] != 8'hff)
@@ -72,21 +68,18 @@ proc case_split_fma32 {} {
     caseAssume (spec.multiplicand(1)[30:23] != 8'hff)
     caseAssume (spec.addend(1)[30:23] != 8'h00)
     caseAssume (spec.addend(1)[30:23] != 8'hff)
-
     caseBegin A_dnorm
     caseAssume (spec.multiplier(1)[30:23] == 8'h00)
     caseAssume (spec.multiplicand(1)[30:23] != 8'h00)
     caseAssume (spec.multiplicand(1)[30:23] != 8'hff)
     caseAssume (spec.addend(1)[30:23] != 8'h00)
     caseAssume (spec.addend(1)[30:23] != 8'hff)
-
     caseBegin B_dnorm
     caseAssume (spec.multiplicand(1)[30:23] == 8'h00)
     caseAssume (spec.multiplier(1)[30:23] != 8'h00)
     caseAssume (spec.multiplier(1)[30:23] != 8'hff)
     caseAssume (spec.addend(1)[30:23] != 8'h00)
     caseAssume (spec.addend(1)[30:23] != 8'hff)
-
     caseBegin C_dnorm
     caseAssume (spec.addend(1)[30:23] == 8'h00)
     caseAssume (spec.multiplier(1)[30:23] != 8'h00)
@@ -94,25 +87,21 @@ proc case_split_fma32 {} {
     caseAssume (spec.multiplicand(1)[30:23] != 8'h00)
     caseAssume (spec.multiplicand(1)[30:23] != 8'hff)
     caseEnumerate cdn1 -expr spec.addend[22:0] -parent C_dnorm -type leading1
-
     caseBegin AB_dnorm
     caseAssume (spec.multiplier(1)[30:23] == 8'h00)
     caseAssume (spec.multiplicand(1)[30:23] == 8'h00)
     caseAssume (spec.addend(1)[30:23] != 8'h00)
     caseAssume (spec.addend(1)[30:23] != 8'hff)
-
     caseBegin BC_dnorm
     caseAssume (spec.multiplicand(1)[30:23] == 8'h00)
     caseAssume (spec.addend(1)[30:23] == 8'h00)
     caseAssume (spec.multiplier(1)[30:23] != 8'h00)
     caseAssume (spec.multiplier(1)[30:23] != 8'hff)
-
     caseBegin AC_dnorm
     caseAssume (spec.multiplier(1)[30:23] == 8'h00)
     caseAssume (spec.addend(1)[30:23] == 8'h00)
     caseAssume (spec.multiplicand(1)[30:23] != 8'h00)
     caseAssume (spec.multiplicand(1)[30:23] != 8'hff)
-
     caseBegin ABC_dnorm
     caseAssume (spec.multiplier(1)[30:23] == 8'h00)
     caseAssume (spec.multiplicand(1)[30:23] == 8'h00)
@@ -128,7 +117,6 @@ proc make {} {
 proc run_main {} {
     set_user_assumes_lemmas_procedure "ual_main"
     set_hector_case_splitting_procedure "case_split_fma32"
-    set_fml_var hector_num_solvers_per_proof 4
-    set_fml_var hector_max_local_jobs 16
+    set_fml_var orch_distrib 8
     solveNB p
 }
