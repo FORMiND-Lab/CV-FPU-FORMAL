@@ -1,5 +1,5 @@
 #=============================================================================
-# command_script_fma32_directed.tcl — Quick sanity check with directed cases
+# command_script_fp32_directed.tcl — Quick sanity check with directed cases
 #
 # Instead of exhaustive case splitting (97-bit space), this script constrains
 # inputs to the 11 directed test cases from tests/directed_cases.hex.
@@ -7,7 +7,7 @@
 #
 # Usage:
 #   cd formal/run
-#   vcf -f ../tcl/command_script_fma32_directed.tcl -fmode DPV
+#   vcf -f ../tcl/command_script_fp32_directed.tcl -fmode DPV
 #   vcf> make
 #   vcf> run
 #=============================================================================
@@ -21,10 +21,15 @@ proc compile_spec {} {
 
     cppan -I../../third_party/softfloat/include \
           -I../../third_party/softfloat/source/RISCV \
-          ../spec/fma_spec_wrap_fp32_fmadd.cpp \
+          ../spec/fma_spec_wrap_fp32.cpp \
           \
           ../../third_party/softfloat/source/f32_mulAdd.c \
           ../../third_party/softfloat/source/s_mulAddF32.c \
+          ../../third_party/softfloat/source/f32_add.c \
+          ../../third_party/softfloat/source/s_addMagsF32.c \
+          ../../third_party/softfloat/source/f32_sub.c \
+          ../../third_party/softfloat/source/s_subMagsF32.c \
+          ../../third_party/softfloat/source/f32_mul.c \
           ../../third_party/softfloat/source/s_roundPackToF32.c \
           ../../third_party/softfloat/source/s_normRoundPackToF32.c \
           ../../third_party/softfloat/source/s_normSubnormalF32Sig.c \
@@ -54,7 +59,7 @@ proc compile_impl {} {
         ../../third_party/cvfpu/common_cells/src/cf_math_pkg.sv \
         ../../third_party/cvfpu/common_cells/src/lzc.sv \
         ../../third_party/cvfpu/common_cells/src/rr_arb_tree.sv \
-        ../../rtl/fma_wrap_fmad_fp32.sv
+        ../../rtl/fma_wrap_fp32.sv
 
     compile_design impl
 }

@@ -1,5 +1,5 @@
 #============================================================================
-# command_script_fp32_fmadd.tcl — FP32 FMADD (op_i=0, op_mod=0)
+# command_script_fp32_add.tcl — FP32 ADD (op_i=2, op_mod=0)
 # Uses unified spec: fma_spec_wrap_fp32.cpp
 #============================================================================
 
@@ -54,7 +54,7 @@ proc ual_main {} {
     assume impl.go(1) == 1
     map_by_name -inputs -specphase 1 -implphase 1
     assume spec.rounding_mode(1) < 5
-    assume impl.op_i(1) == 0
+    assume impl.op_i(1) == 2
     assume impl.op_mod_i(1) == 0
     lemma result_eq = spec.result(1) == impl.result(1)
     lemma except_eq = spec.exceptions(1) == impl.exceptions(1)

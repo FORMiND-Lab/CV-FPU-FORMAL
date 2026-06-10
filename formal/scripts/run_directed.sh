@@ -34,7 +34,7 @@ echo "============================================================"
 echo " Hector DPV: Directed Case Sanity Check (11 cases)"
 echo "============================================================"
 
-vcf -f ../tcl/command_script_fma32_directed.tcl -fmode DPV
+vcf -f ../tcl/command_script_fp32_directed.tcl -fmode DPV
 
 echo ""
 echo "============================================================"

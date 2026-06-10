@@ -74,7 +74,7 @@ VFLAGS    += -CFLAGS "-I$(SOFTFLOAT_INC) -I$(CSRC_DIR)"
 # ---- RTL 源文件（包定义必须最先） ----
 RTL_SRCS  := $(CVFPU_DIR)/fpnew_pkg.sv
 RTL_SRCS  += $(TB_DIR)/fmad_dpi.sv
-RTL_SRCS  += $(RTL_DIR)/fma_wrap_fmad_fp32.sv
+RTL_SRCS  += $(RTL_DIR)/fma_wrap_fp32.sv
 RTL_SRCS  += $(CVFPU_DIR)/fpnew_classifier.sv
 RTL_SRCS  += $(CVFPU_DIR)/fpnew_rounding.sv
 RTL_SRCS  += $(CVFPU_DIR)/fpnew_fma.sv

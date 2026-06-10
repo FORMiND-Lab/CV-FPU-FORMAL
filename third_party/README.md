@@ -39,9 +39,9 @@
 - **来源**：https://github.com/ucb-bar/berkeley-softfloat-3
 - **版本**：Release 3e
 - **许可**：UC Berkeley（BSD 风格，详见各源文件头部）
-- **包含文件**：FP32 `f32_mulAdd` 及 FP16 `f16_add` / `f16_sub` / `f16_mul` / `f16_mulAdd` 所需文件（非完整库）
+- **包含文件**：FP32 `f32_mulAdd` / `f32_add` / `f32_sub` / `f32_mul` 及 FP16 `f16_mulAdd` / `f16_add` / `f16_sub` / `f16_mul` 所需文件（非完整库）
 
-### 修改总览：2 个文件修改 + 1 个文件新建 + 5 个 FP16 文件新增 + 其余未改动
+### 修改总览：2 个文件修改 + 1 个文件新建 + 5 个 FP16 文件新增 + 5 个 FP32 文件新增 + 其余未改动
 
 所有修改均为 **Hector cppan 兼容性适配**，不影响 SoftFloat 的功能行为或数值结果。
 
@@ -89,12 +89,20 @@
 
 | 文件 | 状态 |
 |------|------|
-| `source/f32_mulAdd.c` | 一致 |
+| `source/f32_mulAdd.c` | 一致（上游 FP32 FMA，Cosim DPI 使用） |
 | `source/s_mulAddF32.c` | 一致 |
+| `source/f32_add.c` | 一致（上游 FP32 加法，Hector 专用） |
+| `source/s_addMagsF32.c` | 一致 |
+| `source/f32_sub.c` | 一致（上游 FP32 减法，Hector 专用） |
+| `source/s_subMagsF32.c` | 一致 |
+| `source/f32_mul.c` | 一致（上游 FP32 乘法，Hector 专用） |
 | `source/s_roundPackToF32.c` | 一致 |
 | `source/s_normRoundPackToF32.c` | 一致 |
 | `source/s_normSubnormalF32Sig.c` | 一致 |
 | `source/RISCV/s_propagateNaNF32UI.c` | 一致 |
+
+> `f32_add.c`、`f32_sub.c`、`f32_mul.c` 及其内部辅助文件为 Hector 形式化验证专用（统一 FP32 spec 需要）。
+> Cosim DPI golden model 通过 `f32_mulAdd` + 操作数符号翻转实现全部运算，不需要这些文件。
 
 #### FP16 文件（Hector DPV 新增）
 

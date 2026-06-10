@@ -3,7 +3,7 @@
 //
 // Interfaces aligned with Hector formal verification platform:
 //   - DPI golden port names match formal/spec/fma_spec_wrap_fp32_fmad.cpp
-//   - DUT wrapper reuses rtl/fma_wrap_fmad_fp32.sv (go/valid protocol)
+//   - DUT wrapper reuses rtl/fma_wrap_fp32.sv (go/valid protocol)
 //   - op_i / op_mod_i use fpnew_pkg encoding, consistent with fpnew_fma RTL
 //
 //   Combinational logic generates test vectors + calls DPI golden model.

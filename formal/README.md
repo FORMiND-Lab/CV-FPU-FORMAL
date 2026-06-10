@@ -14,15 +14,19 @@
 
 # 2. 容器内，从项目根目录运行验证
 
-# FP16 — 单操作验证
+# FP16 — 单操作验证 (7 种)
 cd /home/eda
 ./formal/scripts/run_fp16.sh fmadd    # FMADD (op_i=0, op_mod=0)
 ./formal/scripts/run_fp16.sh mul      # MUL
 ./formal/scripts/run_fp16.sh sub      # SUB
 
-# FP32 — 完整证明
-./formal/scripts/run_directed.sh      # 快速冒烟: 11 directed cases
-./formal/scripts/run_fp32_fmadd.sh        # 完整证明: 全空间穷举
+# FP32 — 单操作验证 (7 种)
+./formal/scripts/run_fp32.sh fmadd    # FMADD (op_i=0, op_mod=0)
+./formal/scripts/run_fp32.sh fmsub    # FMSUB
+./formal/scripts/run_fp32.sh mul      # MUL
+
+# FP32 — 快速冒烟
+./formal/scripts/run_directed.sh      # 11 directed cases
 ```
 
 脚本自动 `cd formal/run/` 后调用 `vcf`，产物留在 `formal/run/` 中。
@@ -41,17 +45,26 @@ cd /home/eda
 | `command_script_fp16_sub.tcl` | SUB | 2 / 1 |
 | `command_script_fp16_mul.tcl` | MUL | 3 / 0 |
 
-全部指向同一个合并 spec：`formal/spec/fma_spec_wrap_fp16.cpp`
+全部指向同一个统一 spec：`formal/spec/fma_spec_wrap_fp16.cpp`
 
-### FP32（统一 TCL）
+### FP32（7 操作 + 1 统一 spec + 1 快速冒烟）
 
-| TCL | 说明 |
-|---|---|
-| `command_script_fp32_fmadd.tcl` | 完整证明 (case split) |
-| `command_script_fma32_directed.tcl` | 快速冒烟 (directed cases) |
-| `command_script_fma32_enu.tcl` | 枚举策略 |
-| `command_script_fma32_hdps_full.tcl` | HDPS 完整流程 |
-| `command_script_fma32_hdps_mul.tcl` | HDPS 乘法器专用 |
+| TCL | 操作 | op_i / op_mod |
+|---|---|---|
+| `command_script_fp32_fmadd.tcl` | FMADD | 0 / 0 |
+| `command_script_fp32_fmsub.tcl` | FMSUB | 0 / 1 |
+| `command_script_fp32_fnmsub.tcl` | FNMSUB | 1 / 0 |
+| `command_script_fp32_fnmadd.tcl` | FNMADD | 1 / 1 |
+| `command_script_fp32_add.tcl` | ADD | 2 / 0 |
+| `command_script_fp32_sub.tcl` | SUB | 2 / 1 |
+| `command_script_fp32_mul.tcl` | MUL | 3 / 0 |
+| `command_script_fp32_directed.tcl` | — | 快速冒烟 (11 directed cases) |
+
+全部指向同一个统一 spec：`formal/spec/fma_spec_wrap_fp32.cpp`
+
+> `formal/spec/fma_spec_wrap_fp32_fmadd.cpp` 为遗留的 FMADD-only spec，保留供参考。
+
+FP16 和 FP32 各自的 7 个 TCL 结构完全相同（共享 `compile_spec`、`compile_impl`、`case_split`），仅在 `ual_main` 中约束不同的 `op_i` / `op_mod_i`（以及 MUL 额外约束 C 操作为非特殊值）。
 
 ## 目录结构
 
@@ -59,9 +72,11 @@ cd /home/eda
 formal/
 ├── README.md
 ├── run/                                    # vcf 运行目录（所有产物在这里）
+│   └── host.qsub                           # 分布式求解节点配置
 ├── spec/
-│   ├── fma_spec_wrap_fp16.cpp              # FP16 合并 spec (全部 7 种运算)
-│   └── fma_spec_wrap_fp32_fmadd.cpp         # FP32 spec (SoftFloat golden)
+│   ├── fma_spec_wrap_fp16.cpp              # FP16 统一 spec (全部 7 种运算)
+│   ├── fma_spec_wrap_fp32.cpp              # FP32 统一 spec (全部 7 种运算)
+│   └── fma_spec_wrap_fp32_fmadd.cpp        # (遗留) FP32 FMADD-only spec
 ├── tcl/
 │   ├── command_script_fp16_fmadd.tcl       # FP16: FMADD
 │   ├── command_script_fp16_fmsub.tcl       # FP16: FMSUB
@@ -70,18 +85,21 @@ formal/
 │   ├── command_script_fp16_add.tcl         # FP16: ADD
 │   ├── command_script_fp16_sub.tcl         # FP16: SUB
 │   ├── command_script_fp16_mul.tcl         # FP16: MUL
-│   ├── command_script_fp32_fmadd.tcl       # FP32: 完整证明
-│   ├── command_script_fma32_directed.tcl   # FP32: 快速冒烟
-│   ├── command_script_fma32_enu.tcl        # FP32: 枚举
-│   ├── command_script_fma32_hdps_full.tcl  # FP32: HDPS 完整
-│   └── command_script_fma32_hdps_mul.tcl   # FP32: HDPS 乘法器
+│   ├── command_script_fp32_fmadd.tcl       # FP32: FMADD
+│   ├── command_script_fp32_fmsub.tcl       # FP32: FMSUB
+│   ├── command_script_fp32_fnmsub.tcl      # FP32: FNMSUB
+│   ├── command_script_fp32_fnmadd.tcl      # FP32: FNMADD
+│   ├── command_script_fp32_add.tcl         # FP32: ADD
+│   ├── command_script_fp32_sub.tcl         # FP32: SUB
+│   ├── command_script_fp32_mul.tcl         # FP32: MUL
+│   └── command_script_fp32_directed.tcl   # FP32: 快速冒烟 (11 cases)
 └── scripts/
-    ├── run_fp16.sh                         # FP16 操作选择验证
-    ├── run_fp32_fmadd.sh                       # FP32 完整证明
+    ├── run_fp16.sh                         # FP16 操作选择验证 (7 ops)
+    ├── run_fp32.sh                         # FP32 操作选择验证 (7 ops)
     └── run_directed.sh                     # FP32 快速冒烟
 ```
 
-> RTL wrapper 文件统一放在 `cosim/rtl/` 下（`fma_wrap_fp16.sv`、`fma_wrap_fmad_fp32.sv`），Hector TCL 通过 `../../rtl/` 引用。
+> RTL wrapper 文件统一放在 `rtl/` 下（`fma_wrap_fp16.sv`、`fma_wrap_fp32.sv`），Hector TCL 通过 `../../rtl/` 引用。
 
 ## 架构
 
@@ -92,11 +110,13 @@ formal/
 │  FP16: fma_spec_wrap_fp16.cpp    │     │  FP16: fma_wrap_fp16.sv           │
 │    └─ SoftFloat f16_mulAdd/add/  │     │    └─ fpnew_fma (FP16)            │
 │       sub/mul + op_i/op_mod 选择  │     │                                   │
-│                                   │     │  FP32: fma_wrap_fmad_fp32.sv     │
-│  FP32: fma_spec_wrap_fp32_fmadd   │     │    └─ fpnew_fma (FP32)            │
-│    └─ SoftFloat f32_mulAdd()     │     │                                   │
-│                                   │     │  统一接口: go/valid 握手           │
+│                                   │     │  FP32: fma_wrap_fp32.sv     │
+│  FP32: fma_spec_wrap_fp32.cpp    │     │    └─ fpnew_fma (FP32)            │
+│    └─ SoftFloat f32_mulAdd/add/  │     │                                   │
+│       sub/mul + op_i/op_mod 选择  │     │  统一接口: go/valid 握手           │
+│                                   │     │                                   │
 │  5 种 RISC-V 舍入模式             │     │                                   │
+│  7 种运算 (FMADD/FMSUB/.../MUL)  │     │  7 种运算 (fpnew_pkg encoding)    │
 └──────────────────────────────────┘     └──────────────────────────────────┘
               │                                         │
               └──────────── map_by_name ────────────────┘
@@ -112,11 +132,33 @@ formal/
 | 1 | `make` | 编译 spec (cppan) + impl (vcs) + compose |
 | 2 | `run_main` | 完整证明：case split → parallel solve |
 
+每个操作独立的 TCL 脚本通过 `vcf -f <tcl> -fmode DPV` 一键运行，或进入 vcf 交互模式手动执行 `make` 和 `run_main`。
+
+## Case Split 策略
+
+FP16 和 FP32 TCL 使用相同的 case split 框架，按 IEEE 754 浮点分类划分：
+
+| Case | 描述 | 枚举策略 |
+|------|------|----------|
+| `A_inf_NaN` | A 操作数为 Inf/NaN | 穷举 B, C |
+| `B_inf_NaN` | B 操作数为 Inf/NaN | 穷举 A, C |
+| `C_inf_NaN` | C 操作数为 Inf/NaN | 穷举 A, B |
+| `norm_norm_norm` | 三者均为 normal | 穷举 |
+| `A_dnorm` | A 为 subnormal | leading1 枚举尾数 |
+| `B_dnorm` | B 为 subnormal | leading1 枚举尾数 |
+| `C_dnorm` | C 为 subnormal | leading1 枚举尾数 |
+| `AB_dnorm` | A, B 均为 subnormal | — |
+| `BC_dnorm` | B, C 均为 subnormal | leading1 枚举尾数 |
+| `AC_dnorm` | A, C 均为 subnormal | leading1 枚举尾数 |
+| `ABC_dnorm` | 三者均为 subnormal | leading1 枚举尾数 |
+
+FP32 使用 `[30:23]` (8-bit 指数) 和 `[22:0]` (23-bit 尾数)，Inf/NaN 检查为 `8'hff`，subnormal 检查为 `8'h00`。
+
 ## 配置
 
 ### 组合逻辑 vs 流水线
 
-修改 `cosim/rtl/fma_wrap_fp16.sv`（或 `fma_wrap_fmad_fp32.sv`）：
+修改 `rtl/fma_wrap_fp32.sv`（或 `fma_wrap_fp16.sv`）：
 
 ```systemverilog
 parameter int unsigned NUM_PIPE_REGS = 0   // 当前：组合逻辑
@@ -151,18 +193,18 @@ lemma result_eq = spec.result(1) == impl.result(3)
 | 耗时 | 秒级 | 秒~分钟 | 小时级 |
 | 覆盖度 | 统计采样 | 基本场景 | 100% 数学证明 |
 | 用途 | 快速回归、debug | 流程冒烟 | 签核级完备证明 |
+| FP32 运算 | 全 5 种 (DPI) | 11 cases (FMADD) | 全 7 种 (Hector) |
+| FP16 运算 | — | — | 全 7 种 (Hector) |
 
 ## 已知问题
-
-详见 `../temp/hector_open_issues.md`：
 
 1. **HDPS 子证明**：fpnew_fma 内部乘法器和前导零单元的 cutpoint 信号名需确定
 2. **NaN payload**：RISC-V canonical NaN vs IEEE 754 NaN payload 差异
 3. **时序延迟**：fpnew_fma 确切的 latency cycle 数需验证
+4. **MUL 操作 C 约束**：`f32_mul` / `f16_mul` 忽略 C 操作数，但 `fpnew_fma` 在 MUL 模式下可能通过 C 传播 NaN。MUL TCL 在 `ual_main` 中约束 C 为非特殊值 (`spec.addend(1)[30:23] != 8'hff`)
 
 ## 参考
 
-- [cosim → Hector 迁移计划](../temp/cosim_to_hector_migration_plan.md)
-- [Hector 开放问题](../temp/hector_open_issues.md)
-- [DPV_Advanced 示例](../third_party/example/DPV_Advanced/)
 - [第三方依赖说明](../third_party/README.md)
+- [cvfpu (OpenHW Group)](https://github.com/openhwgroup/cvfpu)
+- [Berkeley SoftFloat](https://github.com/ucb-bar/berkeley-softfloat-3)
