@@ -96,7 +96,7 @@ CEX_FILE ?= $(TEST_DIR)/cex_cases.hex
 CEX_ARGS := +CEX_FILE=$(CEX_FILE)
 
 # ---- 目标 ----
-.PHONY: all softfloat build run cex wave clean
+.PHONY: all softfloat build run cex wave clean clean_formal clean_all
 
 all: softfloat build run
 
@@ -162,3 +162,8 @@ cex: softfloat
 clean:
 	rm -rf $(LOG_DIR)/obj_dir $(LOG_DIR)/obj_dir_cex $(LOG_DIR)/*.vcd $(LOG_DIR)/*.log
 	rm -rf $(SOFTFLOAT_BUILD_DIR)
+
+clean_formal:
+	rm -rf $(FORMAL_DIR)/run/fp16_* $(FORMAL_DIR)/run/fp32_* $(FORMAL_DIR)/run/fp32_directed
+
+clean_all: clean clean_formal

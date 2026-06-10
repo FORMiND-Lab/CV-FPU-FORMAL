@@ -78,8 +78,8 @@ void hector_wrapper()
     Hector::registerInput("multiplicand",   &multiplicand,   16);
     Hector::registerInput("addend",         &addend,         16);
     Hector::registerInput("rounding_mode",  &rounding_mode,  8 * sizeof(rounding_mode));
-    Hector::registerInput("op_i",           &op_i,           8 * sizeof(op_i));
-    Hector::registerInput("op_mod_i",       &op_mod_i,        8 * sizeof(op_mod_i));
+    Hector::registerInput("op_i",           &op_i,           4);   // 4-bit, matches RTL input [3:0]
+    Hector::registerInput("op_mod_i",       &op_mod_i,       1);   // 1-bit, matches RTL input
     Hector::registerOutput("result",        &result,         16);
     Hector::registerOutput("exceptions",    &exceptions,     8 * sizeof(exceptions));
 

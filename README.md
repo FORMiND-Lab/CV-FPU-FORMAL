@@ -33,7 +33,6 @@ CV-FPU-FORMAL/
 ├── Makefile                                # Cosim + CEX replay 编译与仿真
 ├── run_eda.sh                              # Docker 启动脚本 (EDA 工具环境)
 ├── start-hector-ssh.sh                     # 启动 Hector SSH 服务
-├── setup-hector-qsub.sh                    # 配置并行求解节点
 ├── .gitignore
 │
 ├── rtl/                                    # DUT wrapper (Hector + Cosim 共用)
@@ -135,9 +134,8 @@ CEX 输入文件格式 (与 `sim/tests/directed_cases.hex` 相同)：
 # 0. 宿主机：启动 EDA Docker 容器
 ./run_eda.sh
 
-# 1. 容器内：启动 Hector SSH 服务 + 配置并行求解节点
+# 1. 容器内：启动 Hector SSH 服务
 ./start-hector-ssh.sh
-./setup-hector-qsub.sh 16
 
 # 2. 容器内，从项目根目录运行验证
 cd /home/eda

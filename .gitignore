@@ -17,8 +17,9 @@ tb_fma_cosim
 # ---- Hector / VC Formal artifacts ----
 # Run via ./formal/scripts/run_hector.sh → all in formal/run/
 formal/run/*
-!formal/run/.gitkeep
-!formal/run/host.qsub
+!formal/run/fp16_*/
+!formal/run/fp32_*/
+!formal/run/fp32_directed/
 
 # ---- Third-party ----
 # Examples (reference only, clone separately)

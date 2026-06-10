@@ -5,49 +5,48 @@
 
 set _hector_comp_use_new_flow true
 set _hector_softfloat_version custom
-set _label "FP32 FNMADD"
 set_hector_multiple_solve_scripts true
 set_hector_multiple_solve_scripts_list {orch_multipliers orch_custom_fma}
 
 proc compile_spec {} {
     create_design -name spec -top hector_wrapper
-    cppan -I../../third_party/softfloat/include \
-          -I../../third_party/softfloat/source/RISCV \
-          ../spec/fma_spec_wrap_fp32.cpp \
-          ../../third_party/softfloat/source/f32_mulAdd.c \
-          ../../third_party/softfloat/source/s_mulAddF32.c \
-          ../../third_party/softfloat/source/f32_add.c \
-          ../../third_party/softfloat/source/s_addMagsF32.c \
-          ../../third_party/softfloat/source/f32_sub.c \
-          ../../third_party/softfloat/source/s_subMagsF32.c \
-          ../../third_party/softfloat/source/f32_mul.c \
-          ../../third_party/softfloat/source/s_roundPackToF32.c \
-          ../../third_party/softfloat/source/s_normRoundPackToF32.c \
-          ../../third_party/softfloat/source/s_normSubnormalF32Sig.c \
-          ../../third_party/softfloat/source/s_shortShiftRightJam64.c \
-          ../../third_party/softfloat/source/s_shiftRightJam32.c \
-          ../../third_party/softfloat/source/s_shiftRightJam64.c \
-          ../../third_party/softfloat/source/s_countLeadingZeros64.c \
-          ../../third_party/softfloat/source/s_countLeadingZeros32.c \
-          ../../third_party/softfloat/source/s_countLeadingZeros8.c \
-          ../../third_party/softfloat/source/RISCV/s_propagateNaNF32UI.c \
-          ../../third_party/softfloat/source/RISCV/softfloat_raiseFlags.c \
-          ../../third_party/softfloat/source/softfloat_state.c
+    cppan -I../../../third_party/softfloat/include \
+          -I../../../third_party/softfloat/source/RISCV \
+          ../../spec/fma_spec_wrap_fp32.cpp \
+          ../../../third_party/softfloat/source/f32_mulAdd.c \
+          ../../../third_party/softfloat/source/s_mulAddF32.c \
+          ../../../third_party/softfloat/source/f32_add.c \
+          ../../../third_party/softfloat/source/s_addMagsF32.c \
+          ../../../third_party/softfloat/source/f32_sub.c \
+          ../../../third_party/softfloat/source/s_subMagsF32.c \
+          ../../../third_party/softfloat/source/f32_mul.c \
+          ../../../third_party/softfloat/source/s_roundPackToF32.c \
+          ../../../third_party/softfloat/source/s_normRoundPackToF32.c \
+          ../../../third_party/softfloat/source/s_normSubnormalF32Sig.c \
+          ../../../third_party/softfloat/source/s_shortShiftRightJam64.c \
+          ../../../third_party/softfloat/source/s_shiftRightJam32.c \
+          ../../../third_party/softfloat/source/s_shiftRightJam64.c \
+          ../../../third_party/softfloat/source/s_countLeadingZeros64.c \
+          ../../../third_party/softfloat/source/s_countLeadingZeros32.c \
+          ../../../third_party/softfloat/source/s_countLeadingZeros8.c \
+          ../../../third_party/softfloat/source/RISCV/s_propagateNaNF32UI.c \
+          ../../../third_party/softfloat/source/RISCV/softfloat_raiseFlags.c \
+          ../../../third_party/softfloat/source/softfloat_state.c
     compile_design spec
 }
 
 proc compile_impl {} {
     create_design -name impl -top fma_hector_wrap -clock clock -reset resetN -negReset
     vcs -sverilog \
-        +incdir+../../third_party/cvfpu/common_cells/include \
-        ../../third_party/cvfpu/fpnew_pkg.sv \
-        ../../third_party/cvfpu/fpnew_classifier.sv \
-        ../../third_party/cvfpu/fpnew_rounding.sv \
-        ../../third_party/cvfpu/fpnew_fma.sv \
-        ../../third_party/cvfpu/common_cells/src/cf_math_pkg.sv \
-        ../../third_party/cvfpu/common_cells/src/lzc.sv \
-        ../../third_party/cvfpu/common_cells/src/rr_arb_tree.sv \
-        ../../rtl/fma_wrap_fp32.sv
+        +incdir+../../../third_party/cvfpu/common_cells/include \
+        ../../../third_party/cvfpu/fpnew_pkg.sv \
+        ../../../third_party/cvfpu/fpnew_classifier.sv \
+        ../../../third_party/cvfpu/fpnew_rounding.sv \
+        ../../../third_party/cvfpu/fpnew_fma.sv \
+        ../../../third_party/cvfpu/common_cells/src/cf_math_pkg.sv \
+        ../../../third_party/cvfpu/common_cells/src/lzc.sv \
+        ../../../third_party/cvfpu/common_cells/src/rr_arb_tree.sv \
+        ../../../rtl/fma_wrap_fp32.sv
     compile_design impl
 }
 
@@ -144,10 +143,15 @@ proc run_main {} {
     set_user_assumes_lemmas_procedure "ual_main"
     set_hector_case_splitting_procedure "case_split_fp32"
     set_fml_var orch_distrib 16
-    puts "=== Starting $_label proof ==="
+    puts "=== Starting FP32 FNMADD proof ==="
     set t0 [clock seconds]
     solveNB p
+    proofwait -timeLimit 7200 p
     set t1 [clock seconds]
-    puts "=== $_label proof complete ==="
-    puts "elapsed: [expr {$t1-$t0}] seconds"
+    set _elapsed [expr {$t1-$t0}]
+    if { [proofstatus p] } {
+        puts "=== FP32 FNMADD proof SUCCEEDED (${_elapsed}s) ==="
+    } else {
+        puts "=== FP32 FNMADD proof TIMED OUT or FAILED (${_elapsed}s) ==="
+    }
 }

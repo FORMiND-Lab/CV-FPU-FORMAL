@@ -8,9 +8,8 @@
 # 0. 宿主机：启动 EDA Docker 容器
 ./run_eda.sh
 
-# 1. 容器内：启动 Hector SSH 服务 + 配置并行求解节点
+# 1. 容器内：启动 Hector SSH 服务
 ./start-hector-ssh.sh
-./setup-hector-qsub.sh 16
 
 # 2. 容器内，从项目根目录运行验证
 
@@ -71,8 +70,7 @@ FP16 和 FP32 各自的 7 个 TCL 结构完全相同（共享 `compile_spec`、`
 ```
 formal/
 ├── README.md
-├── run/                                    # vcf 运行目录（所有产物在这里）
-│   └── host.qsub                           # 分布式求解节点配置
+├── run/                                    # vcf 运行目录（每操作独立子目录）
 ├── spec/
 │   ├── fma_spec_wrap_fp16.cpp              # FP16 统一 spec (全部 7 种运算)
 │   ├── fma_spec_wrap_fp32.cpp              # FP32 统一 spec (全部 7 种运算)
