@@ -1,0 +1,9 @@
+# CEX Test Cases — one case per line
+# Format: A B C RM OP_I OP_MOD
+#   A,B,C:   32-bit hex (FP32)
+#   RM:      0=RNE, 1=RTZ, 2=RDN, 3=RUP, 4=RMM
+#   OP_I:    fpnew_pkg::operation_e: FMADD=0, FNMSUB=1, ADD=2, MUL=3, ADDS=4
+#   OP_MOD:  0/1 selects variant (FMSUB, FNMADD, SUB, ...)
+
+# Default CEX (UF flag mismatch candidate)
+01010298 408008e6 81e21720 4 0 0

@@ -15,9 +15,10 @@ tb_fma_cosim
 *.wlft
 
 # ---- Hector / VC Formal artifacts ----
-# Run via ./hector/scripts/run_hector.sh → all in hector/run/
-hector/run/*
-!hector/run/.gitkeep
+# Run via ./formal/scripts/run_hector.sh → all in formal/run/
+formal/run/*
+!formal/run/.gitkeep
+!formal/run/host.qsub
 
 # ---- Third-party ----
 # Examples (reference only, clone separately)
@@ -42,5 +43,3 @@ logs/*.log
 # ---- OS ----
 .DS_Store
 Thumbs.db
-# Additional run directories
-hector/run_*/
