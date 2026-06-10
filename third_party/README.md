@@ -16,7 +16,7 @@
 
 - **来源**：https://github.com/openhwgroup/cvfpu
 - **许可**：Solderpad Hardware License v0.51（Apache 2.0 兼容）
-- **包含文件**：仅 FP32 FMA 相关子集 — `fpnew_fma`、`fpnew_pkg`、`fpnew_classifier`、`fpnew_rounding`，以及 `common_cells` 辅助模块（`cf_math_pkg`、`lzc`、`rr_arb_tree`、`registers.svh`）
+- **包含文件**：仅 FP32 / FP16 FMA 相关子集 — `fpnew_fma`、`fpnew_pkg`、`fpnew_classifier`、`fpnew_rounding`，以及 `common_cells` 辅助模块（`cf_math_pkg`、`lzc`、`rr_arb_tree`、`registers.svh`）
 - **修改**：**无。** 全部 8 个文件与上游逐字节一致。
 
 ### 文件审计（diff 对比上游 `cvfpu/src/`）
@@ -39,9 +39,9 @@
 - **来源**：https://github.com/ucb-bar/berkeley-softfloat-3
 - **版本**：Release 3e
 - **许可**：UC Berkeley（BSD 风格，详见各源文件头部）
-- **包含文件**：仅 FP32 `f32_mulAdd` 所需文件（非完整库）
+- **包含文件**：FP32 `f32_mulAdd` 及 FP16 `f16_add` / `f16_sub` / `f16_mul` / `f16_mulAdd` 所需文件（非完整库）
 
-### 修改总览：2 个文件修改 + 1 个文件新建 + 16 个文件未改动
+### 修改总览：2 个文件修改 + 1 个文件新建 + 5 个 FP16 文件新增 + 其余未改动
 
 所有修改均为 **Hector cppan 兼容性适配**，不影响 SoftFloat 的功能行为或数值结果。
 
@@ -85,6 +85,49 @@
 
 ### 文件审计（diff 对比上游 `berkeley-softfloat-3/source/`）
 
+#### FP32 文件
+
+| 文件 | 状态 |
+|------|------|
+| `source/f32_mulAdd.c` | 一致 |
+| `source/s_mulAddF32.c` | 一致 |
+| `source/s_roundPackToF32.c` | 一致 |
+| `source/s_normRoundPackToF32.c` | 一致 |
+| `source/s_normSubnormalF32Sig.c` | 一致 |
+| `source/RISCV/s_propagateNaNF32UI.c` | 一致 |
+
+#### FP16 文件（Hector DPV 新增）
+
+| 文件 | 状态 |
+|------|------|
+| `source/f16_mulAdd.c` | 一致（上游 FP16 FMA） |
+| `source/s_mulAddF16.c` | 一致 |
+| `source/f16_add.c` | 一致（上游 FP16 加法） |
+| `source/s_addMagsF16.c` | 一致 |
+| `source/f16_sub.c` | 一致（上游 FP16 减法） |
+| `source/s_subMagsF16.c` | 一致 |
+| `source/f16_mul.c` | 一致（上游 FP16 乘法） |
+| `source/s_roundPackToF16.c` | 一致 |
+| `source/s_normRoundPackToF16.c` | 一致 |
+| `source/s_normSubnormalF16Sig.c` | 一致 |
+| `source/RISCV/s_propagateNaNF16UI.c` | 一致 |
+
+#### 共享辅助文件（FP32 + FP16 共用）
+
+| 文件 | 状态 |
+|------|------|
+| `source/s_shortShiftRightJam64.c` | 一致 |
+| `source/s_shiftRightJam32.c` | 一致 |
+| `source/s_shiftRightJam64.c` | 一致 |
+| `source/s_countLeadingZeros64.c` | 一致 |
+| `source/s_countLeadingZeros32.c` | 一致 |
+| `source/s_countLeadingZeros16.c` | 一致 |
+| `source/s_countLeadingZeros8.c` | 一致 |
+| `source/softfloat_state.c` | 一致 |
+| `source/RISCV/softfloat_raiseFlags.c` | 一致 |
+
+#### 头文件
+
 | 文件 | 状态 |
 |------|------|
 | `include/softfloat.h` | **已修改**（见修改 2） |
@@ -94,21 +137,7 @@
 | `include/primitives.h` | 一致 |
 | `include/primitiveTypes.h` | 一致 |
 | `include/softfloat_types.h` | 一致 |
-| `source/f32_mulAdd.c` | 一致 |
-| `source/s_mulAddF32.c` | 一致 |
-| `source/s_roundPackToF32.c` | 一致 |
-| `source/s_normRoundPackToF32.c` | 一致 |
-| `source/s_normSubnormalF32Sig.c` | 一致 |
-| `source/s_shortShiftRightJam64.c` | 一致 |
-| `source/s_shiftRightJam32.c` | 一致 |
-| `source/s_shiftRightJam64.c` | 一致 |
-| `source/s_countLeadingZeros64.c` | 一致 |
-| `source/s_countLeadingZeros32.c` | 一致 |
-| `source/s_countLeadingZeros8.c` | 一致 |
-| `source/softfloat_state.c` | 一致 |
 | `source/RISCV/specialize.h` | 一致 |
-| `source/RISCV/s_propagateNaNF32UI.c` | 一致 |
-| `source/RISCV/softfloat_raiseFlags.c` | 一致 |
 
 ### 编译产物溯源
 

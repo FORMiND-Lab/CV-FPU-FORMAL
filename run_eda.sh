@@ -27,6 +27,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# 使用 --net=host 时，2222 是宿主机网络命名空间的端口。
+# 如果多个容器同时运行，请改成 2223/2224 等。
+HECTOR_SSH_PORT="${HECTOR_SSH_PORT:-2222}"
+
 docker run -it --rm \
     -u root \
     --net=host \
@@ -34,6 +38,7 @@ docker run -it --rm \
     -e XAUTHORITY="$XAUTH" \
     -e QT_X11_NO_MITSHM=1 \
     -e NO_AT_BRIDGE=1 \
+    -e HECTOR_SSH_PORT="$HECTOR_SSH_PORT" \
     -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
     -v "$XAUTH:$XAUTH:ro" \
     -v /home/synopsys:/eda/synopsys:ro \

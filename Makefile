@@ -8,11 +8,11 @@
 # ---- 项目路径 ----
 PROJ_DIR      := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 RTL_DIR       := $(PROJ_DIR)/rtl
-TB_DIR        := $(PROJ_DIR)/tb
-CSRC_DIR      := $(PROJ_DIR)/csrc
-LOG_DIR       := $(PROJ_DIR)/logs
-TEST_DIR      := $(PROJ_DIR)/tests
-HECTOR_DIR    := $(PROJ_DIR)/hector
+TB_DIR        := $(PROJ_DIR)/sim/tb
+CSRC_DIR      := $(PROJ_DIR)/sim/csrc
+LOG_DIR       := $(PROJ_DIR)/sim/logs
+TEST_DIR      := $(PROJ_DIR)/sim/tests
+FORMAL_DIR    := $(PROJ_DIR)/formal
 THIRD_PARTY   := $(PROJ_DIR)/third_party
 
 # ---- 第三方依赖路径 ----
@@ -68,13 +68,13 @@ VFLAGS    += -Wno-fatal -Wno-UNOPTFLAT -Wno-UNUSEDSIGNAL
 VFLAGS    += -I$(CVFPU_DIR)
 VFLAGS    += -I$(COMMON_CELLS)/include
 VFLAGS    += -I$(COMMON_CELLS)/src
-VFLAGS    += -I$(HECTOR_DIR)/rtl
+VFLAGS    += -I$(RTL_DIR)
 VFLAGS    += -CFLAGS "-I$(SOFTFLOAT_INC) -I$(CSRC_DIR)"
 
 # ---- RTL 源文件（包定义必须最先） ----
 RTL_SRCS  := $(CVFPU_DIR)/fpnew_pkg.sv
-RTL_SRCS  += $(TB_DIR)/dpi_fma_golden.sv
-RTL_SRCS  += $(HECTOR_DIR)/rtl/fma_hector_wrap.sv
+RTL_SRCS  += $(TB_DIR)/fmad_dpi.sv
+RTL_SRCS  += $(RTL_DIR)/fma_wrap_fmad_fp32.sv
 RTL_SRCS  += $(CVFPU_DIR)/fpnew_classifier.sv
 RTL_SRCS  += $(CVFPU_DIR)/fpnew_rounding.sv
 RTL_SRCS  += $(CVFPU_DIR)/fpnew_fma.sv
@@ -83,7 +83,7 @@ RTL_SRCS  += $(COMMON_CELLS)/src/lzc.sv
 RTL_SRCS  += $(COMMON_CELLS)/src/rr_arb_tree.sv
 
 # ---- C++ / Testbench 源文件 ----
-CPP_SRCS  := $(CSRC_DIR)/fma_golden_dpi.cpp
+CPP_SRCS  := $(CSRC_DIR)/fma_dpi.cpp
 CPP_SRCS  += $(CSRC_DIR)/sim_main.cpp
 CPP_SRCS  += $(TB_DIR)/tb_fma_cosim.sv
 
@@ -148,7 +148,7 @@ cex: softfloat
 	$(VERILATOR) $(VFLAGS) \
 		-top $(CEX_TOP_MOD) \
 		$(RTL_SRCS) \
-		$(CSRC_DIR)/fma_golden_dpi.cpp \
+		$(CSRC_DIR)/fma_dpi.cpp \
 		$(CSRC_DIR)/sim_main_cex.cpp \
 		$(TB_DIR)/tb_fma_cex.sv \
 		$(SOFTFLOAT_LIB) \
