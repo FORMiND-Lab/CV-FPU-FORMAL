@@ -7,7 +7,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-PORT="${HECTOR_SSH_PORT:-2222}"
+PORT="${1:-${HECTOR_SSH_PORT:-2222}}"
 LOG="/tmp/sshd_${PORT}.log"
 
 echo "[INFO] Starting Hector SSH localhost worker on port ${PORT}"

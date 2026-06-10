@@ -8,27 +8,32 @@
 # 0. 宿主机：启动 EDA Docker 容器
 ./run_eda.sh
 
-# 1. 容器内：启动 Hector SSH 服务
+# 1. 容器内：启动 Hector SSH 服务（可指定端口，默认 2222）
 ./start-hector-ssh.sh
+# ./start-hector-ssh.sh 2223          # 指定端口
 
-# 2. 容器内，从项目根目录运行验证
+# 2. 容器内，从项目根目录运行验证（可指定 worker 数，默认 16）
+cd /home/eda
 
 # FP16 — 单操作验证 (7 种)
-cd /home/eda
 ./formal/scripts/run_fp16.sh fmadd    # FMADD (op_i=0, op_mod=0)
-./formal/scripts/run_fp16.sh mul      # MUL
-./formal/scripts/run_fp16.sh sub      # SUB
+./formal/scripts/run_fp16.sh mul 8    # MUL, 8 workers
 
 # FP32 — 单操作验证 (7 种)
 ./formal/scripts/run_fp32.sh fmadd    # FMADD (op_i=0, op_mod=0)
-./formal/scripts/run_fp32.sh fmsub    # FMSUB
-./formal/scripts/run_fp32.sh mul      # MUL
+./formal/scripts/run_fp32.sh fmsub 4  # FMSUB, 4 workers
 
 # FP32 — 快速冒烟
-./formal/scripts/run_directed.sh      # 11 directed cases
+./formal/scripts/run_directed.sh      # 11 directed cases, 16 workers
+./formal/scripts/run_directed.sh 8    # 8 workers
+
+# 并行运行（各操作产物独立目录，互不干扰）
+# ./formal/scripts/run_fp32.sh fmadd &
+# ./formal/scripts/run_fp32.sh mul &
+# ./formal/scripts/run_fp16.sh add &
 ```
 
-脚本自动 `cd formal/run/` 后调用 `vcf`，产物留在 `formal/run/` 中。
+脚本在 `formal/run/<精度>_<操作>/` 下自动创建独立子目录，host.qsub 和 vcf 产物各归各位，可并行运行。
 
 ## TCL 概览
 

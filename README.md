@@ -134,29 +134,31 @@ CEX 输入文件格式 (与 `sim/tests/directed_cases.hex` 相同)：
 # 0. 宿主机：启动 EDA Docker 容器
 ./run_eda.sh
 
-# 1. 容器内：启动 Hector SSH 服务
+# 1. 容器内：启动 Hector SSH 服务（可指定端口，默认 2222）
 ./start-hector-ssh.sh
+# ./start-hector-ssh.sh 2223     # 指定端口
 
 # 2. 容器内，从项目根目录运行验证
 cd /home/eda
 
-# FP16 — 单操作验证
-./formal/scripts/run_fp16.sh fmadd    # FMADD
-./formal/scripts/run_fp16.sh mul      # MUL
-./formal/scripts/run_fp16.sh add      # ADD
+# FP16 — 单操作验证（可指定 worker 数，默认 16）
+./formal/scripts/run_fp16.sh fmadd       # FMADD, 16 workers
+./formal/scripts/run_fp16.sh mul 8       # MUL, 8 workers
 # ... 全部 7 种操作: fmadd, fmsub, fnmsub, fnmadd, add, sub, mul
 
 # FP32 — 单操作验证 (全 7 种)
-./formal/scripts/run_fp32.sh fmadd    # FMADD
-./formal/scripts/run_fp32.sh fmsub    # FMSUB
-./formal/scripts/run_fp32.sh mul      # MUL
+./formal/scripts/run_fp32.sh fmadd       # FMADD, 16 workers
+./formal/scripts/run_fp32.sh fmsub 8     # FMSUB, 8 workers
 # ... 全部 7 种操作: fmadd, fmsub, fnmsub, fnmadd, add, sub, mul
 
 # FP32 — 快速冒烟 (秒级)
-./formal/scripts/run_directed.sh
+./formal/scripts/run_directed.sh         # 16 workers
+./formal/scripts/run_directed.sh 4       # 4 workers
 
-# 进入 vcf 交互模式
-# vcf> make
+# 并行运行示例（各操作产物在 formal/run/ 下独立子目录）
+# ./formal/scripts/run_fp32.sh fmadd &
+# ./formal/scripts/run_fp32.sh mul &
+# ./formal/scripts/run_fp16.sh add &
 # vcf> run
 ```
 
