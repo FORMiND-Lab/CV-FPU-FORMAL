@@ -14,6 +14,7 @@
 
 set _hector_comp_use_new_flow true
 set _hector_softfloat_version custom
+set _label "FP32 Directed (11 cases)"
 
 #=============================================================================
 proc compile_spec {} {
@@ -138,5 +139,10 @@ proc make {} {
 #=============================================================================
 proc run {} {
     set_user_assumes_lemmas_procedure "ual"
+    puts "=== Starting $_label proof ==="
+    set t0 [clock seconds]
     solveNB p
+    set t1 [clock seconds]
+    puts "=== $_label proof complete ==="
+    puts "elapsed: [expr {$t1 - $t0}] seconds"
 }

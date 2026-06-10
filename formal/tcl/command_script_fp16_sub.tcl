@@ -5,6 +5,7 @@
 
 set _hector_comp_use_new_flow true
 set _hector_softfloat_version custom
+set _label "FP16 SUB"
 set_hector_multiple_solve_scripts true
 set_hector_multiple_solve_scripts_list {orch_multipliers orch_custom_fma}
 
@@ -144,5 +145,10 @@ proc run_main {} {
     set_user_assumes_lemmas_procedure "ual_main"
     set_hector_case_splitting_procedure "case_split_fp16"
     set_fml_var orch_distrib 16
+    puts "=== Starting $_label proof ==="
+    set t0 [clock seconds]
     solveNB p
+    set t1 [clock seconds]
+    puts "=== $_label proof complete ==="
+    puts "elapsed: [expr {$t1-$t0}] seconds"
 }
