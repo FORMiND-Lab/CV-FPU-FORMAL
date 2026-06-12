@@ -16,7 +16,7 @@ FORMAL_DIR    := $(PROJ_DIR)/formal
 THIRD_PARTY   := $(PROJ_DIR)/third_party
 
 # ---- 第三方依赖路径 ----
-CVFPU_DIR           := $(THIRD_PARTY)/cvfpu
+CVFPU_DIR           := $(THIRD_PARTY)/cvfpu/src
 COMMON_CELLS        := $(CVFPU_DIR)/common_cells
 SOFTFLOAT_DIR       := $(THIRD_PARTY)/softfloat
 SOFTFLOAT_INC       := $(SOFTFLOAT_DIR)/include

@@ -38,14 +38,14 @@ proc compile_spec {} {
 proc compile_impl {} {
     create_design -name impl -top fma_hector_wrap -clock clock -reset resetN -negReset
     vcs -sverilog \
-        +incdir+../../../third_party/cvfpu/common_cells/include \
-        ../../../third_party/cvfpu/fpnew_pkg.sv \
-        ../../../third_party/cvfpu/fpnew_classifier.sv \
-        ../../../third_party/cvfpu/fpnew_rounding.sv \
-        ../../../third_party/cvfpu/fpnew_fma.sv \
-        ../../../third_party/cvfpu/common_cells/src/cf_math_pkg.sv \
-        ../../../third_party/cvfpu/common_cells/src/lzc.sv \
-        ../../../third_party/cvfpu/common_cells/src/rr_arb_tree.sv \
+        +incdir+../../../third_party/cvfpu/src/common_cells/include \
+        ../../../third_party/cvfpu/src/fpnew_pkg.sv \
+        ../../../third_party/cvfpu/src/fpnew_classifier.sv \
+        ../../../third_party/cvfpu/src/fpnew_rounding.sv \
+        ../../../third_party/cvfpu/src/fpnew_fma.sv \
+        ../../../third_party/cvfpu/src/common_cells/src/cf_math_pkg.sv \
+        ../../../third_party/cvfpu/src/common_cells/src/lzc.sv \
+        ../../../third_party/cvfpu/src/common_cells/src/rr_arb_tree.sv \
         ../../../rtl/fma_wrap_fp32.sv
     compile_design impl
 }
