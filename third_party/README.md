@@ -5,32 +5,49 @@
 
 ## 上游参考
 
-| 组件 | 上游仓库（本地镜像） |
-|------|----------------------|
-| cvfpu     | `/home/shibo/desktop/test_cv_fpv/cvfpu` |
-| SoftFloat | `/home/shibo/desktop/test_cv_fpv/berkeley-softfloat-3` |
+| 组件 | 上游仓库 | 引入方式 |
+|------|----------|----------|
+| cvfpu     | https://github.com/openhwgroup/cvfpu | **git submodule** |
+| SoftFloat | `/home/shibo/desktop/test_cv_fpv/berkeley-softfloat-3` | vendored copy（部分文件有修改） |
 
 ---
 
-## cvfpu (OpenHW Group)
+## cvfpu (OpenHW Group) — git submodule
 
 - **来源**：https://github.com/openhwgroup/cvfpu
 - **许可**：Solderpad Hardware License v0.51（Apache 2.0 兼容）
-- **包含文件**：仅 FP32 / FP16 FMA 相关子集 — `fpnew_fma`、`fpnew_pkg`、`fpnew_classifier`、`fpnew_rounding`，以及 `common_cells` 辅助模块（`cf_math_pkg`、`lzc`、`rr_arb_tree`、`registers.svh`）
-- **修改**：**无。** 全部 8 个文件与上游逐字节一致。
+- **引入方式**：**git submodule**，固定于 commit `8a18a8b468039c80f3988687009984f6299eb4d8`
+- **上游目录结构**：所有 RTL 源文件位于 `src/` 子目录下（`src/fpnew_pkg.sv`、`src/fpnew_fma.sv` 等）
+- **修改**：**无。** 所有文件与上游逐字节一致，submodule 检出后直接引用，不经过任何本地修改。
 
-### 文件审计（diff 对比上游 `cvfpu/src/`）
+### 使用的文件（submodule 内路径）
 
-| 文件 | 状态 |
+TCL 与 Makefile 中引用路径均带 `src/` 前缀，与上游目录结构一致：
+
+| 文件（相对于 `third_party/cvfpu/`） | 用途 |
 |------|------|
-| `cvfpu/fpnew_pkg.sv` | 一致 |
-| `cvfpu/fpnew_fma.sv` | 一致 |
-| `cvfpu/fpnew_classifier.sv` | 一致 |
-| `cvfpu/fpnew_rounding.sv` | 一致 |
-| `cvfpu/common_cells/src/cf_math_pkg.sv` | 一致 |
-| `cvfpu/common_cells/src/lzc.sv` | 一致 |
-| `cvfpu/common_cells/src/rr_arb_tree.sv` | 一致 |
-| `cvfpu/common_cells/include/common_cells/registers.svh` | 一致 |
+| `src/fpnew_pkg.sv` | FP 格式参数定义、operation_e 枚举 |
+| `src/fpnew_fma.sv` | FMA 运算核心（乘法器 + 加法器 + 舍入） |
+| `src/fpnew_classifier.sv` | 操作数分类（normal/subnormal/zero/NaN/Inf） |
+| `src/fpnew_rounding.sv` | IEEE 754 舍入逻辑 |
+| `src/common_cells/src/cf_math_pkg.sv` | 数学函数包 |
+| `src/common_cells/src/lzc.sv` | 前导零计数器 |
+| `src/common_cells/src/rr_arb_tree.sv` | Round-Robin 仲裁树 |
+| `src/common_cells/include/common_cells/registers.svh` | 寄存器宏 |
+
+### submodule 初始化
+
+```bash
+git submodule update --init --recursive
+```
+
+TCL 脚本运行时，VCS 编译器直接从 submodule 工作树中读取 `src/` 下的源文件，路径为：
+
+```
+../../../third_party/cvfpu/src/fpnew_pkg.sv
+../../../third_party/cvfpu/src/fpnew_fma.sv
+../../../third_party/cvfpu/src/common_cells/...
+```
 
 ---
 
