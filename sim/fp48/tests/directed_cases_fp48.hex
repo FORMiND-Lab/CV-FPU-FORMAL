@@ -1,0 +1,384 @@
+#==============================================================================
+# directed_cases_fp48.hex — 100 FMADD Cases for FP48 Functional Coverage
+#
+# FP48 format: E11M36, bias=1023, NaN-boxed in 64-bit container
+#   bits [63:48] = 0xFFFF (NaN-box)
+#   bit  [47]    = sign
+#   bits [46:36] = exponent (11 bits)
+#   bits [35:0]  = mantissa (36 bits, 9 hex digits)
+#
+# File format: <A_hex> <B_hex> <C_hex> <RM> <OP_I> <OP_MOD>
+#   RM:    0=RNE, 1=RTZ, 2=RDN, 3=RUP, 4=RMM
+#   OP_I:  0=FMADD
+#   OP_MOD: 0
+#
+# Key FP48 NaN-boxed constants:
+#   +0.0   = 0xFFFF000000000000    +1.0   = 0xFFFF3FF000000000
+#   -0.0   = 0xFFFF800000000000    -1.0   = 0xFFFFBFF000000000
+#   +2.0   = 0xFFFF400000000000    +0.5   = 0xFFFF3FE000000000
+#   +∞     = 0xFFFF7FF000000000    qNaN   = 0xFFFF7FF800000000
+#   -∞     = 0xFFFFFFF000000000    sNaN   = 0xFFFF7FF000000001
+#   max_n  = 0xFFFF7FEFFFFFFFFF    min_n  = 0xFFFF001000000000
+#   max_s  = 0xFFFF000FFFFFFFFFF    min_s  = 0xFFFF000000000001
+#==============================================================================
+
+# ============================================================
+# Group 1: Basic Normal Operations (cases 1-20, RM=0 RNE)
+# ============================================================
+
+# 1: +1.0 × +1.0 + +0.0 = +1.0 (exact, no flags)
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 2: +2.0 × +1.0 + +0.0 = +2.0 (exact)
+0xFFFF400000000000 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 3: +1.0 × +0.5 + +0.0 = +0.5 (exact)
+0xFFFF3FF000000000 0xFFFF3FE000000000 0xFFFF000000000000 0 0 0
+
+# 4: +1.5 × +1.0 + +0.0 = +1.5 (exact)
+0xFFFF3FF800000000 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 5: +1.25 × +1.0 + +0.5 = +1.75 (exact)
+0xFFFF3FF400000000 0xFFFF3FF000000000 0xFFFF3FE000000000 0 0 0
+
+# 6: +3.0 × +2.0 + +1.0 = +7.0 (exact)
+0xFFFF400800000000 0xFFFF400000000000 0xFFFF3FF000000000 0 0 0
+
+# 7: -1.0 × +1.0 + +0.0 = -1.0 (exact)
+0xFFFFBFF000000000 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 8: +1.0 × -1.0 + +0.0 = -1.0 (exact)
+0xFFFF3FF000000000 0xFFFFBFF000000000 0xFFFF000000000000 0 0 0
+
+# 9: -1.0 × -1.0 + +0.0 = +1.0 (exact)
+0xFFFFBFF000000000 0xFFFFBFF000000000 0xFFFF000000000000 0 0 0
+
+# 10: +1.0 × +1.0 + -1.0 = +0.0 (exact cancellation)
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFFBFF000000000 0 0 0
+
+# 11: +1.0 × +1.0 + -2.0 = -1.0 (exact)
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFFC00000000000 0 0 0
+
+# 12: +2.0 × +3.0 + -5.0 = +1.0 (exact, 6-5=1)
+0xFFFF400000000000 0xFFFF400800000000 0xFFFFC01400000000 0 0 0
+
+# 13: +0.25 × +0.25 + +0.0 = +0.0625 (exact, 2^-4)
+0xFFFF3FD000000000 0xFFFF3FD000000000 0xFFFF000000000000 0 0 0
+
+# 14: +1.0 × (+1.0+1ulp) + +0.0 = +1.0+1ulp (exact product)
+0xFFFF3FF000000000 0xFFFF3FF000000001 0xFFFF000000000000 0 0 0
+
+# 15: +1.0 × +1.0 + +1.0 = +2.0 (exact)
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFF3FF000000000 0 0 0
+
+# 16: -1.0 × -1.0 + -1.0 = +0.0 (exact cancellation)
+0xFFFFBFF000000000 0xFFFFBFF000000000 0xFFFFBFF000000000 0 0 0
+
+# 17: -1.0 × +1.0 + +1.0 = +0.0 (exact cancellation: -1+1=0)
+0xFFFFBFF000000000 0xFFFF3FF000000000 0xFFFF3FF000000000 0 0 0
+
+# 18: +1.0 × +0.5 + +0.25 = +0.75 (exact)
+0xFFFF3FF000000000 0xFFFF3FE000000000 0xFFFF3FD000000000 0 0 0
+
+# 19: +0.5 × +0.5 + +0.5 = +0.75 (exact: 0.25+0.5=0.75)
+0xFFFF3FE000000000 0xFFFF3FE000000000 0xFFFF3FE000000000 0 0 0
+
+# 20: +2.0 × +2.0 + +0.0 = +4.0 (exact)
+0xFFFF400000000000 0xFFFF400000000000 0xFFFF000000000000 0 0 0
+
+# ============================================================
+# Group 2: Zero Handling (cases 21-30, RM=0 RNE)
+# ============================================================
+
+# 21: +0.0 × +1.0 + +1.0 = +1.0 (zero product + normal addend)
+0xFFFF000000000000 0xFFFF3FF000000000 0xFFFF3FF000000000 0 0 0
+
+# 22: +1.0 × +0.0 + +1.0 = +1.0
+0xFFFF3FF000000000 0xFFFF000000000000 0xFFFF3FF000000000 0 0 0
+
+# 23: +1.0 × +1.0 + +0.0 = +1.0 (addend zero)
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 24: +0.0 × +0.0 + +0.0 = +0.0 (all zeros)
+0xFFFF000000000000 0xFFFF000000000000 0xFFFF000000000000 0 0 0
+
+# 25: -0.0 × +1.0 + +1.0 = +1.0 (signed zero product)
+0xFFFF800000000000 0xFFFF3FF000000000 0xFFFF3FF000000000 0 0 0
+
+# 26: +1.0 × -0.0 + +1.0 = +1.0
+0xFFFF3FF000000000 0xFFFF800000000000 0xFFFF3FF000000000 0 0 0
+
+# 27: +1.0 × +1.0 + -0.0 = +1.0
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFF800000000000 0 0 0
+
+# 28: -0.0 × -0.0 + +0.0 = +0.0 (product sign: -*- = +)
+0xFFFF800000000000 0xFFFF800000000000 0xFFFF000000000000 0 0 0
+
+# 29: -0.0 × +1.0 + -1.0 = -1.0
+0xFFFF800000000000 0xFFFF3FF000000000 0xFFFFBFF000000000 0 0 0
+
+# 30: +0.0 × +1.0 + -0.0 = -0.0 (RNE: +0 + -0 = +0? depends on IEEE)
+#    IEEE 754-2008 §6.3: (+0)+(-0)=+0 when rounding to nearest
+0xFFFF000000000000 0xFFFF3FF000000000 0xFFFF800000000000 0 0 0
+
+# ============================================================
+# Group 3: Infinity Handling (cases 31-40, RM=0 RNE)
+# ============================================================
+
+# 31: +∞ × +1.0 + +0.0 = +∞
+0xFFFF7FF000000000 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 32: -∞ × +1.0 + +0.0 = -∞
+0xFFFFFFF000000000 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 33: -∞ × -1.0 + +0.0 = +∞
+0xFFFFFFF000000000 0xFFFFBFF000000000 0xFFFF000000000000 0 0 0
+
+# 34: +1.0 × +1.0 + +∞ = +∞ (addend infinity dominates)
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFF7FF000000000 0 0 0
+
+# 35: +1.0 × +1.0 + -∞ = -∞
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFFFFF000000000 0 0 0
+
+# 36: +∞ × +∞ + +0.0 = +∞
+0xFFFF7FF000000000 0xFFFF7FF000000000 0xFFFF000000000000 0 0 0
+
+# 37: +∞ × +1.0 + -∞ = qNaN, NV=1 (∞-∞ invalid)
+0xFFFF7FF000000000 0xFFFF3FF000000000 0xFFFFFFF000000000 0 0 0
+
+# 38: +∞ × +0.0 + +1.0 = qNaN, NV=1 (0×∞ invalid, regardless of addend)
+0xFFFF7FF000000000 0xFFFF000000000000 0xFFFF3FF000000000 0 0 0
+
+# 39: +0.0 × +∞ + +1.0 = qNaN, NV=1
+0xFFFF000000000000 0xFFFF7FF000000000 0xFFFF3FF000000000 0 0 0
+
+# 40: +∞ × +0.0 + +∞ = qNaN, NV=1 (0×∞ still triggers NV even with ∞ addend)
+0xFFFF7FF000000000 0xFFFF000000000000 0xFFFF7FF000000000 0 0 0
+
+# ============================================================
+# Group 4: NaN Handling (cases 41-50, RM=0 RNE)
+# ============================================================
+
+# 41: qNaN × +1.0 + +0.0 = qNaN, NV=0 (quiet NaN propagates silently)
+0xFFFF7FF800000000 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 42: +1.0 × qNaN + +0.0 = qNaN, NV=0
+0xFFFF3FF000000000 0xFFFF7FF800000000 0xFFFF000000000000 0 0 0
+
+# 43: +1.0 × +1.0 + qNaN = qNaN, NV=0
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFF7FF800000000 0 0 0
+
+# 44: sNaN × +1.0 + +0.0 = qNaN, NV=1 (sNaN → qNaN + invalid)
+0xFFFF7FF000000001 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 45: +1.0 × +1.0 + sNaN = qNaN, NV=1
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFF7FF000000001 0 0 0
+
+# 46: qNaN × +∞ + +0.0 = qNaN, NV=0 (NaN overrides ∞)
+0xFFFF7FF800000000 0xFFFF7FF000000000 0xFFFF000000000000 0 0 0
+
+# 47: +∞ × +1.0 + qNaN = qNaN, NV=0
+0xFFFF7FF000000000 0xFFFF3FF000000000 0xFFFF7FF800000000 0 0 0
+
+# 48: +0.0 × +∞ + qNaN = qNaN, NV=1 (0×∞ still raises NV, even with qNaN present)
+0xFFFF000000000000 0xFFFF7FF000000000 0xFFFF7FF800000000 0 0 0
+
+# 49: sNaN × +0.0 + +1.0 = qNaN, NV=1 (sNaN NV + possible 0×∞? no ∞ here)
+0xFFFF7FF000000001 0xFFFF000000000000 0xFFFF3FF000000000 0 0 0
+
+# 50: qNaN × sNaN + +0.0 = qNaN, NV=1 (multiple NaN, NV from sNaN)
+0xFFFF7FF800000000 0xFFFF7FF000000001 0xFFFF000000000000 0 0 0
+
+# ============================================================
+# Group 5: Subnormal Handling (cases 51-60, RM=0 RNE)
+# ============================================================
+
+# 51: min_normal × +1.0 + +0.0 = min_normal (exact, at normal/subnormal boundary)
+#     min_n = exp=1, man=0 → value=2^-1022
+0xFFFF001000000000 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 52: max_subnormal × +1.0 + +0.0 = max_subnormal (exact, largest subnormal)
+#     max_s = exp=0, man=all 1s → value≈2^-1022*(1-2^-36)
+0xFFFF000FFFFFFFFFF 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 53: min_subnormal × +1.0 + +0.0 = min_subnormal or 0 (UF)
+#     min_s = exp=0, man=1 → value=2^-1058
+0xFFFF000000000001 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 54: min_normal × +0.5 + +0.0 = subnormal (half of min_normal = 2^-1023)
+#     RNE: 2^-1023 in FP48 is subnormal with man[MSB]=1
+0xFFFF001000000000 0xFFFF3FE000000000 0xFFFF000000000000 0 0 0
+
+# 55: max_subnormal × +0.5 + +0.0 = smaller subnormal (UF, IX likely)
+0xFFFF000FFFFFFFFFF 0xFFFF3FE000000000 0xFFFF000000000000 0 0 0
+
+# 56: +1.0 × max_subnormal + +0.0 = max_subnormal (exact)
+0xFFFF3FF000000000 0xFFFF000FFFFFFFFFF 0xFFFF000000000000 0 0 0
+
+# 57: max_subnormal × max_subnormal + +0.0 = UF to 0 (product ≈ 2^-2044)
+0xFFFF000FFFFFFFFFF 0xFFFF000FFFFFFFFFF 0xFFFF000000000000 0 0 0
+
+# 58: min_normal × min_normal + +0.0 = UF to 0 or tiny subnormal (2^-2044)
+0xFFFF001000000000 0xFFFF001000000000 0xFFFF000000000000 0 0 0
+
+# 59: +1.5 × max_subnormal + +0.0 = slightly > max_subnormal, may round to min_normal
+0xFFFF3FF800000000 0xFFFF000FFFFFFFFFF 0xFFFF000000000000 0 0 0
+
+# 60: +1.0 × (min_subnormal) + (min_subnormal) = 2 × min_subnormal (UF, IX likely)
+0xFFFF3FF000000000 0xFFFF000000000001 0xFFFF000000000001 0 0 0
+
+# ============================================================
+# Group 6: Overflow Boundaries (cases 61-70, RM=0 RNE)
+# max_normal = {0,0x7FE,all 1s} ≈ 2^1023×(2-2^-36) ≈ 1.8e308
+# ============================================================
+
+# 61: max_normal × +1.0 + +0.0 = max_normal (exact, no overflow)
+0xFFFF7FEFFFFFFFFF 0xFFFF3FF000000000 0xFFFF000000000000 0 0 0
+
+# 62: max_normal × +2.0 + +0.0 = +∞, OF=1, NX=1
+0xFFFF7FEFFFFFFFFF 0xFFFF400000000000 0xFFFF000000000000 0 0 0
+
+# 63: max_normal × +1.5 + +0.0 = +∞, OF=1, NX=1 (1.5×max_normal overflows)
+0xFFFF7FEFFFFFFFFF 0xFFFF3FF800000000 0xFFFF000000000000 0 0 0
+
+# 64: max_normal × +1.0 + max_normal = +∞, OF=1, NX=1 (sum overflows)
+0xFFFF7FEFFFFFFFFF 0xFFFF3FF000000000 0xFFFF7FEFFFFFFFFF 0 0 0
+
+# 65: -max_normal × +2.0 + +0.0 = -∞, OF=1, NX=1
+0xFFFFFFEFFFFFFFFF 0xFFFF400000000000 0xFFFF000000000000 0 0 0
+
+# 66: +2^1023 × +2.0 + +0.0 = overflow to +∞
+#     +2^1023 = exp=0x7FE, man=0 (this is 2^1023, half of max_normal)
+#     48-bit: 0x7FE000000000, boxed: 0xFFFF7FE000000000
+0xFFFF7FE000000000 0xFFFF400000000000 0xFFFF000000000000 0 0 0
+
+# 67: +2^1023 × +1.0 + +2^1023 = +2^1024 = overflow to +∞ (addend pushes over)
+0xFFFF7FE000000000 0xFFFF3FF000000000 0xFFFF7FE000000000 0 0 0
+
+# 68: +2^1000 × +2^24 + +0.0 = +2^1024 = overflow to +∞
+#     +2^1000 = exp=2023=0x7E7, boxed: 0xFFFF7E7000000000
+0xFFFF7E7000000000 0xFFFF417000000000 0xFFFF000000000000 0 0 0
+
+# 69: +1.0 × +1.0 + (value just below overflow) = just below overflow, no OF
+#     exp=0x7FE, man=all 1s except LSB=0
+#     48-bit: 0x7FEFFFFFFFFE, boxed: 0xFFFF7FEFFFFFFFFE
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFF7FEFFFFFFFFE 0 0 0
+
+# 70: (value near max) × +1.0 + (small push to overflow)
+#     exp=0x7FE, man=0xFFFFFFFFFF0, + tiny push to overflow
+0xFFFF7FEFFFFFFFF0 0xFFFF3FF000000000 0xFFFF01F000000000 0 0 0
+
+# ============================================================
+# Group 7: Cancellation & Exact Operations (cases 71-80, RM=0 RNE)
+# ============================================================
+
+# 71: +1.0 × +2.0 + -2.0 = +0.0 (exact cancellation, 2*1-2=0)
+0xFFFF3FF000000000 0xFFFF400000000000 0xFFFFC00000000000 0 0 0
+
+# 72: +3.0 × +1.0 + -3.0 = +0.0 (exact cancellation)
+0xFFFF400800000000 0xFFFF3FF000000000 0xFFFFC00800000000 0 0 0
+
+# 73: +π_near × +1.0 + -(π_near) = tiny residual (near cancellation)
+#     Using +3.14159... approximation: exp=0x400, man=0x921FB54442D (π approximation)
+#     Actually let's use simple: +3.0×+1.0 + -(3.0+1ulp) = -1ulp
+#     +3.0 = 0xFFFF400800000000
+#     -(3.0+1ulp) = 0xFFFFC00800000001
+0xFFFF400800000000 0xFFFF3FF000000000 0xFFFFC00800000001 0 0 0
+
+# 74: +1.0 × +(1.0+ulp) + -1.0 = +1ulp (near cancellation)
+0xFFFF3FF000000000 0xFFFF3FF000000001 0xFFFFBFF000000000 0 0 0
+
+# 75: +(1.0+2ulp)×+1.0 + -(1.0+1ulp) = +1ulp (exact tiny result)
+0xFFFF3FF000000000 0xFFFF3FF000000002 0xFFFFBFF000000001 0 0 0
+
+# 76: max_normal × -1.0 + max_normal = +0.0 (exact cancellation of max values)
+0xFFFF7FEFFFFFFFFF 0xFFFFBFF000000000 0xFFFF7FEFFFFFFFFF 0 0 0
+
+# 77: +1.0 × +1.0 + -(1.0+0.5ulp) = -0.5ulp (negative tiny, exact)
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFFBFF000000000 0 0 0
+
+# 78: +2.0 × +0.5 + -0.75 = +0.25 (partial cancellation, exact: 1-0.75=0.25)
+0xFFFF400000000000 0xFFFF3FE000000000 0xFFFFBFE800000000 0 0 0
+
+# 79: +1.5 × +1.0 + -1.25 = +0.25 (exact)
+0xFFFF3FF800000000 0xFFFF3FF000000000 0xFFFFBFF400000000 0 0 0
+
+# 80: +1.0 × +1.0 + -0.5 = +0.5 (exact)
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFFBFE000000000 0 0 0
+
+# ============================================================
+# Group 8: Rounding Mode Variations (cases 81-90)
+# Same operation, different rounding modes
+# Operation: +1.0 × (+1.0+3ulp) + (-1.0-1ulp) = +2ulp result with small residual
+# A=+1.0, B=1.0+0x3, C=-(1.0+0x1) → product=1.0+0x3, sum=0x2
+# ============================================================
+
+# 81: (1.0+3ulp)×1.0 + (-1.0-1ulp) = +2ulp, RNE
+0xFFFF3FF000000000 0xFFFF3FF000000003 0xFFFFBFF000000001 0 0 0
+
+# 82: Same, RTZ (round toward zero)
+0xFFFF3FF000000000 0xFFFF3FF000000003 0xFFFFBFF000000001 1 0 0
+
+# 83: Same, RDN (round toward -∞)
+0xFFFF3FF000000000 0xFFFF3FF000000003 0xFFFFBFF000000001 2 0 0
+
+# 84: Same, RUP (round toward +∞)
+0xFFFF3FF000000000 0xFFFF3FF000000003 0xFFFFBFF000000001 3 0 0
+
+# 85: Same, RMM (round toward nearest, ties to max magnitude)
+0xFFFF3FF000000000 0xFFFF3FF000000003 0xFFFFBFF000000001 4 0 0
+
+# 86: +1.0 × +1.0 + -1.5 = -0.5, RNE (exact)
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFFBFF800000000 0 0 0
+
+# 87: Same, RDN
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFFBFF800000000 2 0 0
+
+# 88: Same, RUP
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFFBFF800000000 3 0 0
+
+# 89: +0.5 × +0.5 + +0.5 = +0.75, RMM (exact)
+0xFFFF3FE000000000 0xFFFF3FE000000000 0xFFFF3FE000000000 4 0 0
+
+# 90: (1.0+1ulp)×(1.0+1ulp) + 0.0 = 1.0+2ulp+1ulp², RNI
+#     product ≈ 1.0+2ulp (inexact), RNE rounds to nearest
+0xFFFF3FF000000001 0xFFFF3FF000000001 0xFFFF000000000000 0 0 0
+
+# ============================================================
+# Group 9: Edge Values & Boundary Transitions (cases 91-100)
+# ============================================================
+
+# 91: +1.0 × +1.0 + +max_subnormal = +1.0 (subnormal absorbed), RNE
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFF000FFFFFFFFFF 0 0 0
+
+# 92: max_normal × max_normal + 0.0 = +∞, OF/NX (far overflow)
+0xFFFF7FEFFFFFFFFF 0xFFFF7FEFFFFFFFFF 0xFFFF000000000000 0 0 0
+
+# 93: -0.0 × -0.0 + -0.0 = -0.0? (all negative zeros)
+#     product: (-0)×(-0)=+0. (+0)+(-0): IEEE says +0 when RNE
+#     But with FMA: product_sign = +, addend_sign = -. For RNE: +0.
+0xFFFF800000000000 0xFFFF800000000000 0xFFFF800000000000 0 0 0
+
+# 94: -0.0 × -0.0 + -0.0, RDN (round toward -∞: +0+-0 → -0)
+0xFFFF800000000000 0xFFFF800000000000 0xFFFF800000000000 2 0 0
+
+# 95: +1.0 × +1.0 + (-max_subnormal) = +1.0 (tiny subnormal subtracted, may cause IX)
+0xFFFF3FF000000000 0xFFFF3FF000000000 0xFFFF800FFFFFFFFFF 0 0 0
+
+# 96: (min_normal) × (+1.0+1ulp) + 0 = slightly > min_normal, RNE
+#     min_normal = 2^-1022. × (1+2^-36) = 2^-1022 + 2^-1058 = min_normal + min_subnormal
+#     This is normal + tiny, might round to min_normal (IX) or min_normal+1ulp
+0xFFFF001000000000 0xFFFF3FF000000001 0xFFFF000000000000 0 0 0
+
+# 97: max_subnormal × (+1.0+1ulp) + 0 = may round to min_normal or stay subnormal
+#     max_s × (1+2^-36) = value near 2^-1022 boundary, RNE
+0xFFFF000FFFFFFFFFF 0xFFFF3FF000000001 0xFFFF000000000000 0 0 0
+
+# 98: +∞ × +0.0 + -∞ = qNaN, NV=1 (0×∞ + (−∞): 0×∞ triggered first)
+0xFFFF7FF000000000 0xFFFF000000000000 0xFFFFFFF000000000 0 0 0
+
+# 99: qNaN × +∞ + sNaN = qNaN, NV=1 (sNaN in addend, qNaN in product)
+0xFFFF7FF800000000 0xFFFF7FF000000000 0xFFFF7FF000000001 0 0 0
+
+# 100: +1.0 × (-1.0) + (+1.0+1ulp) = +1ulp, exact tiny positive result, RNE
+0xFFFF3FF000000000 0xFFFFBFF000000000 0xFFFF3FF000000001 0 0 0
